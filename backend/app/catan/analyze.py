@@ -433,7 +433,7 @@ def analyze_game(game: dict, focus: int) -> dict:
     scores = {c: _decision(a, c) for c in a.colors}
     components, decision_score = scores[focus]
     opp_decision = sum(scores[p.color][1] for p in opps) / len(opps)
-    decision_edge = decision_score - opp_decision
+    decision_edge = round(decision_score - opp_decision)
     opp_setup = sum(scores[p.color][0]["opening"] for p in opps) / len(opps)
 
     verdict, verdict_detail = _verdict(won, luck_index, decision_edge)
@@ -598,11 +598,13 @@ def _verdict(won: bool, luck: float, edge: float) -> tuple[str, str]:
             return "Earned win", "You won on decisions without help from the dice."
         return "Scrappy win", "Neither the dice nor your decision metrics stood out; you found a way."
     if luck <= -1.0 and edge >= 0:
-        return "Lost to RNG", "You out-decided the table; the dice and robber cost you this one."
-    if luck <= -0.5:
+        return "Lost to RNG", "You matched or out-decided the table; the dice and robber cost you this one."
+    if luck <= -0.5 and edge < 0:
         return "Unlucky and outplayed", "Bad dice made it harder, but opponents also made better decisions."
-    if luck >= 0.5:
+    if luck <= -0.5:
+        return "Unlucky loss", "Dice ran a bit cold and your decisions were on par with the table."
+    if edge < 0 and luck >= 0.5:
         return "Outplayed", "The dice were on your side; the gap came from decisions."
     if edge < 0:
         return "Strategic loss", "Fair dice; opponents made better decisions."
-    return "Close call", "Fair dice and decisions on par with the table; small edges decided it."
+    return "Close call", "Your decision metrics matched or beat the table; small edges or timing decided it."
