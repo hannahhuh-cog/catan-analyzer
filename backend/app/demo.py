@@ -104,7 +104,7 @@ def deep_stats(games: list[dict]) -> dict:
     for g in analyzed:
         by_strategy[g["strategy"]].append(g)
     strategies = [{"key": k, "label": STRATEGY_LABELS[k], **rate(v)} for k, v in by_strategy.items()]
-    strategies.sort(key=lambda r: -r["win_rate"])
+    strategies.sort(key=lambda r: (-r["win_rate"], -r["games"]))
 
     verdicts: dict[str, int] = defaultdict(int)
     for g in analyzed:
@@ -119,25 +119,22 @@ def deep_stats(games: list[dict]) -> dict:
     bad_dec = [g for g in analyzed if g["decision_edge"] <= -5]
 
     insights = []
-    best, worst = strategies[0], strategies[-1]
-    if best["games"] >= 3 and best is not worst:
-        insights.append(
-            {
-                "kind": "strength",
-                "title": f"{best['label']}: {_pct100(best['win_rate'])}% wins",
-                "detail": f"Your best style across {best['games']} games.",
-                "evidence": best,
-            }
-        )
-    if worst["games"] >= 3 and best is not worst:
-        insights.append(
-            {
-                "kind": "weakness",
-                "title": f"{worst['label']}: {_pct100(worst['win_rate'])}% wins",
-                "detail": f"Your weakest style across {worst['games']} games.",
-                "evidence": worst,
-            }
-        )
+    overall = rate(analyzed)["win_rate"]
+    sized = [r for r in strategies if r["games"] >= 5]
+    if len(sized) >= 2 and sized[0]["win_rate"] > sized[-1]["win_rate"]:
+        top = [r for r in sized if r["win_rate"] == sized[0]["win_rate"]]
+        bottom = [r for r in sized if r["win_rate"] == sized[-1]["win_rate"]]
+        for kind, rows, word in (("strength", top, "best"), ("weakness", bottom, "weakest")):
+            insights.append(
+                {
+                    "kind": kind,
+                    "title": " / ".join(r["label"] for r in rows) + f": {_pct100(rows[0]['win_rate'])}% wins",
+                    "detail": f"Your {word} style: "
+                    + ", ".join(f"{r['wins']}/{r['games']}" for r in rows)
+                    + f" games vs {_pct100(overall)}% overall. Strategy is inferred from what you built.",
+                    "evidence": rows[0],
+                }
+            )
     if losses:
         insights.append(
             {

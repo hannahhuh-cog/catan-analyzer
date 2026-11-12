@@ -581,7 +581,9 @@ def _decision(a: Analyzer, color: int) -> tuple[dict, int]:
         "hand_management": round(1 - min(1.0, ps.discarded / 10), 3),
         "awards": round(min(1.0, len(ps.awards) / 2), 3),
     }
-    weights = {"opening": 0.35, "tempo": 0.35, "robber": 0.1, "hand_management": 0.1, "awards": 0.1}
+    # Tempo (being ahead on VP) is shown but not scored: it is an outcome that good dice produce too,
+    # so scoring it would count luck as good decisions.
+    weights = {"opening": 0.45, "robber": 0.2, "hand_management": 0.15, "awards": 0.2}
     tot = sum(w for k, w in weights.items() if components[k] is not None)
     score = round(100 * sum(components[k] * w for k, w in weights.items() if components[k] is not None) / tot)
     return components, score
