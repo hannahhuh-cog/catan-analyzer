@@ -70,6 +70,9 @@ class Analyzer:
         self.moments: list[dict] = []
         self.robber_since: dict[int, int] = {}
         self.rolls: list[dict] = []
+        self.ev_idx = -1
+        self.wp_start: dict[int, float] = {}
+        self.ev_wp: list[dict[int, float]] = []
 
     # ----- production model ----------------------------------------------------
     def income_by_total(self, ps: _PS, robber: bool = True) -> dict[int, int]:
@@ -142,6 +145,7 @@ class Analyzer:
                 "magnitude": round(min(1.0, max(0.0, magnitude)), 3),
                 "title": title,
                 "detail": detail,
+                "_evs": [self.ev_idx],
                 **extra,
             }
         )
@@ -149,7 +153,9 @@ class Analyzer:
     def run(self) -> None:
         setup = True
         self.snapshot()
-        for ev in self.game["events"]:
+        self.wp_start = self.win_probs()
+        for i, ev in enumerate(self.game["events"]):
+            self.ev_idx = i
             t = ev["t"]
             prev_turn = self.turn
             self.turn = ev.get("turn", self.turn)
@@ -160,6 +166,7 @@ class Analyzer:
                 self.snapshot(0)
             p = self.ps.get(ev.get("player")) if "player" in ev else None
             getattr(self, f"on_{t}", lambda e, p: None)(ev, p)
+            self.ev_wp.append(self.win_probs())
         self.snapshot(self.turn)
 
     def snapshot(self, turn: int | None = None) -> None:
@@ -267,7 +274,6 @@ class Analyzer:
             ps.roll_var += sq - mean * mean
             ps.roll_income += inc.get(total, 0) if total != 7 else 0
             ps.blocked += sum(DICE_P[t] * n for t, n in inc_free.items()) - mean
-            ps.hand += inc.get(total, 0) if total != 7 else 0
 
     def on_discard(self, ev: dict, p: _PS) -> None:
         n = sum(ev["cards"].values())
@@ -285,10 +291,17 @@ class Analyzer:
 
     def on_robber(self, ev: dict, p: _PS) -> None:
         h: Hex = parse_id(ev["hex"])  # type: ignore[assignment]
+        prev = self.board.robber
+        if prev is not None and prev in self.board.tiles:
+            pt = self.board.tiles[prev]
+            ev["_prev_hit"] = sorted({self.occupied[c] for c in self.occupied if prev in self.board.corner_hexes(c)})
+            ev["_prev_tile"] = f"{pt.number} {pt.resource}" if pt.number else pt.resource
         self.board.robber = h
         p.robber_moves += 1
         tile = self.board.tiles[h]
         hit = {self.occupied[c] for c in self.occupied if h in self.board.corner_hexes(c)} - {p.color}
+        ev["_hit"] = sorted(hit)
+        ev["_tile"] = f"{tile.number} {tile.resource}" if tile.number else tile.resource
         lead = self.leader(exclude=p.color)
         if lead in hit:
             p.robber_on_leader += 1
@@ -309,6 +322,13 @@ class Analyzer:
                 recent["last_turn"] = self.turn
                 recent["magnitude"] = round(min(1.0, recent["magnitude"] + 0.08), 3)
                 recent["title"] = f"Robber camped on your {tile.number} {tile.resource} ({recent['count']}x)"
+                recent["_evs"].append(self.ev_idx)
+                recent["_by"].append(p.color)
+                by = ", ".join(dict.fromkeys(self.names[x] for x in recent["_by"]))
+                span = f"on turn {self.turn}" if recent["turn"] == self.turn else f"from turn {recent['turn']} to {self.turn}"
+                recent["detail"] = (
+                    f"Blocked {recent['count']} times {span} (~{loss} pips each time), by {by}."
+                )
             elif loss >= 5:
                 self.moment(
                     "luck",
@@ -321,6 +341,7 @@ class Analyzer:
                     by=p.color,
                     count=1,
                     last_turn=self.turn,
+                    _by=[p.color],
                 )
         if not hit:
             self.moment("decision", p.color, -1, 0.2, "Robber hit nobody", "Moved the robber to a hex with no opponents.", hex=cid(h))
@@ -362,7 +383,7 @@ class Analyzer:
         for other in self.ps.values():
             if award in other.awards and other is not p:
                 other.awards.discard(award)
-                self.moment("decision", other.color, -1, 0.45, f"Lost {label}", f"{self.names[p.color]} took it (-2 VP).")
+                self.moment("opponent", other.color, -1, 0.45, f"Lost {label}", f"{self.names[p.color]} took it (-2 VP).")
         p.awards.add(award)
         self.moment("decision", p.color, 1, 0.5, f"Took {label}", "+2 VP.")
 
@@ -440,12 +461,17 @@ def analyze_game(game: dict, focus: int) -> dict:
     final_vp = {c: p.vp() + p.vp_cards for c, p in a.ps.items()}
 
     moments = sorted(a.moments, key=lambda m: (m["turn"], -m["magnitude"]))
+    impact = _attribute(a, focus, moments)
     for m in moments:
         m["mine"] = m["player"] == focus
     mine = [m for m in moments if m["mine"]]
     dec = sorted((m for m in mine if m["kind"] == "decision"), key=lambda m: -m["magnitude"])[:5]
     luck = sorted((m for m in mine if m["kind"] == "luck"), key=lambda m: -m["magnitude"])[:4]
     critical = sorted(dec + luck, key=lambda m: m["turn"])
+    swings = _swings(a, focus, impact, critical)
+    for m in moments:
+        for k in [k for k in m if k.startswith("_")]:
+            del m[k]
 
     return {
         "focus": focus,
@@ -500,6 +526,8 @@ def analyze_game(game: dict, focus: int) -> dict:
         "timeline": a.timeline,
         "moments": moments,
         "critical": critical,
+        "swings": swings,
+        "impact": impact["totals"],
         "board": game["board"],
         "buildings": {
             str(c): {
@@ -558,11 +586,175 @@ def _dice_streaks(a: Analyzer, focus: int) -> None:
                     "title": "Hot dice streak" if d > 0 else "Cold dice streak",
                     "detail": f"Turns {a0['turn']}-{a1['turn']}: {abs(d):.0f} cards {'above' if d > 0 else 'below'} what your "
                     "buildings should have produced.",
+                    "_window": (a0["turn"], a1["turn"]),
                 }
             )
             i += window
         else:
             i += 1
+
+
+CAUSES = ("decision", "luck", "opponent")
+SWING_MIN = 0.12
+DEV_NAMES = {"knight": "a knight", "monopoly": "Monopoly", "year_of_plenty": "Year of Plenty", "road_building": "Road Building"}
+
+
+def _actor(ev: dict) -> int | None:
+    return ev.get("player", ev.get("thief"))
+
+
+def _cause(ev: dict, focus: int, monopolist: int | None) -> str:
+    """Who is responsible for an event's effect on the focus player's win chance: their decision, dice/robber luck, or an opponent."""
+    t = ev["t"]
+    actor = _actor(ev)
+    if t == "roll" or (t == "gain" and ev.get("source") == "roll"):
+        return "luck"
+    if t == "discard":
+        return "decision" if actor == focus else "luck"
+    if t == "robber":
+        if actor == focus:
+            return "decision"
+        return "luck" if focus in ev.get("_hit", ()) or focus in ev.get("_prev_hit", ()) else "opponent"
+    if t == "steal":
+        if ev["thief"] == focus:
+            return "decision"
+        return "luck" if ev["victim"] == focus else "opponent"
+    if t == "lose" and ev.get("source") == "monopoly" and monopolist is not None:
+        actor = monopolist
+    return "decision" if actor == focus else "opponent"
+
+
+def _attribute(a: Analyzer, focus: int, moments: list[dict]) -> dict:
+    """Split every change in win probability into decision / luck / opponent, per event and per turn.
+
+    Event deltas are taken from the same model the timeline plots, so per-turn sums match the chart exactly.
+    """
+    events = a.game["events"]
+    monopolist: dict[int, int] = {}
+    pending: list[int] = []
+    for i, ev in enumerate(events):
+        if ev["t"] == "lose" and ev.get("source") == "monopoly":
+            pending.append(i)
+        elif ev["t"] == "play_dev" and ev.get("card") == "monopoly":
+            monopolist.update({j: ev["player"] for j in pending})
+            pending = []
+    prev = a.wp_start
+    deltas: list[dict[int, float]] = []
+    for wp in a.ev_wp:
+        deltas.append({c: wp[c] - prev[c] for c in a.colors})
+        prev = wp
+    causes = [_cause(ev, focus, monopolist.get(i)) for i, ev in enumerate(events)]
+    by_turn: dict[int, dict[str, float]] = defaultdict(lambda: dict.fromkeys(CAUSES, 0.0))
+    top: dict[tuple[int, str], int] = {}
+    for i, ev in enumerate(events):
+        turn = ev.get("turn", 0)
+        if turn <= 0:
+            continue
+        d = deltas[i][focus]
+        by_turn[turn][causes[i]] += d
+        key = (turn, causes[i])
+        if key not in top or abs(d) > abs(deltas[top[key]][focus]):
+            top[key] = i
+    for m in moments:
+        c = m["player"]
+        if "_window" in m:
+            lo, hi = m["_window"]
+            d = sum(
+                deltas[i][c]
+                for i, ev in enumerate(events)
+                if lo < ev.get("turn", 0) <= hi and ev["t"] in ("roll", "gain") and _cause(ev, c, None) == "luck"
+            )
+        elif m["turn"] == 0:
+            d = None
+        else:
+            d = sum(deltas[i][c] for i in m.get("_evs", []) if i >= 0)
+        m["wp_delta"] = None if d is None else round(d, 3)
+    totals = {k: round(sum(t[k] for t in by_turn.values()), 3) for k in CAUSES}
+    rows = a.timeline
+    totals["start"] = rows[0][f"wp_{focus}"]
+    totals["end"] = rows[-1][f"wp_{focus}"]
+    return {"by_turn": by_turn, "top": top, "totals": totals, "deltas": deltas, "causes": causes}
+
+
+def _describe(a: Analyzer, ev: dict, focus: int) -> str:
+    t = ev["t"]
+    actor = _actor(ev)
+    who = "You" if actor == focus else a.names.get(actor, "Someone")
+    if t == "place":
+        return f"{who} built a {ev['piece']}"
+    if t == "award":
+        return f"{who} took {'Longest Road' if ev['award'] == 'longest_road' else 'Largest Army'}"
+    if t == "buy_dev":
+        return f"{who} bought a development card"
+    if t == "play_dev":
+        return f"{who} played {DEV_NAMES.get(ev['card'], ev['card'])}"
+    if t == "trade_bank":
+        return f"{who} traded with the bank"
+    if t == "robber":
+        if focus in ev.get("_hit", ()):
+            return f"{who} put the robber on your {ev.get('_tile', 'hex')}"
+        if focus in ev.get("_prev_hit", ()):
+            return f"{who} moved the robber off your {ev.get('_prev_tile', 'hex')}"
+        return f"{who} put the robber on the {ev.get('_tile', 'hex')}"
+    if t == "steal":
+        return f"{who} stole a card" + (" from you" if ev["victim"] == focus else "")
+    if t == "discard":
+        return f"{who} discarded {sum(ev['cards'].values())} cards to a 7"
+    if t == "gain":
+        if ev.get("source") == "roll":
+            n = sum(ev["cards"].values())
+            return f"{'You' if actor == focus else who} collected {n} card{'s' if n != 1 else ''} from the dice"
+        return f"{who} gained {sum(ev['cards'].values())} cards ({ev.get('source', 'bonus').replace('_', ' ')})"
+    if t == "lose":
+        return f"{'You' if actor == focus else who} lost {sum(ev['cards'].values())} cards to a Monopoly"
+    if t == "roll":
+        return f"{who} rolled a {sum(ev['dice'])}"
+    return t.replace("_", " ")
+
+
+def _swings(a: Analyzer, focus: int, impact: dict, critical: list[dict], limit: int = 6) -> list[dict]:
+    """The biggest turn-to-turn moves of the focus player's win chance, each labelled with what drove it."""
+    events = a.game["events"]
+    rows = {r["turn"]: r for r in a.timeline}
+    turns = sorted(rows)
+    out = []
+    for turn, parts in impact["by_turn"].items():
+        delta = sum(parts.values())
+        if abs(delta) < SWING_MIN:
+            continue
+        cause = max(CAUSES, key=lambda k: parts[k] * (1 if delta > 0 else -1))
+        i = impact["top"][(turn, cause)]
+        roll = next((e for e in events if e.get("turn") == turn and e["t"] == "roll"), None)
+        title = _describe(a, events[i], focus)
+        if cause == "luck" and events[i]["t"] == "gain" and roll is not None:
+            roller = "You" if roll["player"] == focus else a.names[roll["player"]]
+            title = f"{roller} rolled a {sum(roll['dice'])}: {title[0].lower()}{title[1:]}"
+        prev_turn = turns[turns.index(turn) - 1] if turns.index(turn) else turn
+        before, after = rows[prev_turn][f"wp_{focus}"], rows[turn][f"wp_{focus}"]
+        out.append(
+            {
+                "turn": turn,
+                "kind": cause,
+                "player": focus,
+                "polarity": 1 if delta > 0 else -1,
+                "magnitude": round(min(1.0, abs(delta)), 3),
+                "wp_delta": round(delta, 3),
+                "wp_before": before,
+                "wp_after": after,
+                "parts": {k: round(v, 3) for k, v in parts.items()},
+                "title": title,
+                "detail": "",
+                "mine": True,
+                "swing": True,
+                **({"loc": events[i]["loc"]} if "loc" in events[i] else {}),
+                **({"hex": events[i]["hex"]} if events[i]["t"] == "robber" else {}),
+            }
+        )
+    out = sorted(out, key=lambda s: -abs(s["wp_delta"]))[:limit]
+    for s in out:
+        same = [m for m in critical if m["turn"] == s["turn"] and m["kind"] == s["kind"]]
+        s["moment"] = critical.index(same[0]) if same else None
+    return sorted(out, key=lambda s: s["turn"])
 
 
 def _dice_hist(rolls: list[dict]) -> list[dict]:

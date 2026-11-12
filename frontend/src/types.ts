@@ -70,18 +70,32 @@ export type Profile = {
   }
 }
 
+export type Cause = 'decision' | 'luck' | 'opponent'
+
 export type Moment = {
   turn: number
-  kind: 'decision' | 'luck'
+  kind: Cause
   player: number
   polarity: 1 | -1
   magnitude: number
   title: string
   detail: string
   mine: boolean
+  wp_delta?: number | null
   loc?: string
   hex?: string
 }
+
+export type Swing = Moment & {
+  swing: true
+  wp_delta: number
+  wp_before: number
+  wp_after: number
+  parts: Record<Cause, number>
+  moment: number | null
+}
+
+export type Impact = Record<Cause, number> & { start: number; end: number }
 
 export type BoardData = {
   tiles: { id: string; resource: string; number: number | null; center: [number, number] }[]
@@ -146,6 +160,8 @@ export type GameAnalysis = {
   timeline: Record<string, number>[]
   moments: Moment[]
   critical: Moment[]
+  swings: Swing[]
+  impact: Impact
   board: BoardData
   buildings: Record<string, { settlements: string[]; cities: string[]; roads: string[] }>
 }

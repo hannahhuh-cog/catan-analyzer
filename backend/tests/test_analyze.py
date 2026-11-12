@@ -42,6 +42,20 @@ def test_analysis_shape(games):
     assert len(a["critical"]) <= 9
 
 
+def test_swing_attribution_adds_up(games):
+    for g in games:
+        a = analyze_game(g, 1)
+        imp = a["impact"]
+        assert abs(imp["start"] + imp["decision"] + imp["luck"] + imp["opponent"] - imp["end"]) < 0.01
+        wp = {r["turn"]: r["wp_1"] for r in a["timeline"]}
+        for s in a["swings"]:
+            assert s["kind"] in ("decision", "luck", "opponent")
+            assert abs(sum(s["parts"].values()) - s["wp_delta"]) < 0.01
+            assert abs(wp[s["turn"]] - s["wp_after"]) < 0.01
+            assert abs(s["wp_delta"]) >= 0.12
+        assert not any(k.startswith("_") for m in a["moments"] for k in m)
+
+
 def test_expected_income_tracks_actual(games):
     # Over many games, dice luck should average out near zero.
     zs = [analyze_game(g, c)["luck"]["dice_z"] for g in games for c in (1, 2, 3, 5)]
