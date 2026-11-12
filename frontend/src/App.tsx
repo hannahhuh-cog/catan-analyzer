@@ -77,6 +77,11 @@ export default function App() {
         </a>
         <form className="search" onSubmit={submit}>
           <input
+            type="search"
+            enterKeyHint="search"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             aria-label="Colonist.io username"
             placeholder="Colonist.io username"
             value={query}
@@ -93,7 +98,7 @@ export default function App() {
       </header>
       <main className="content">
         {route.kind === 'home' && <Home onDemo={() => go('/demo')} />}
-        {loading && <div className="state">Loading{route.kind === 'profile' ? ` ${route.user}'s games from Colonist.io` : ''}...</div>}
+        {loading && <div className="state" role="status">Loading{route.kind === 'profile' ? ` ${route.user}'s games from Colonist.io` : ''}...</div>}
         {error && !loading && (
           <div className="state error" role="alert">
             {error}
@@ -128,15 +133,15 @@ function Home({ onDemo }: { onDemo: () => void }) {
       </p>
       <div className="home-cards">
         <div className="card">
-          <h3>Profile analysis</h3>
+          <h2>Profile analysis</h2>
           <p>Up to 100 recent games from Colonist.io's public history: no login needed.</p>
         </div>
         <div className="card">
-          <h3>Luck vs. strategy</h3>
+          <h2>Luck vs. strategy</h2>
           <p>Actual dice income vs. what your buildings should produce, robber damage, and decision quality.</p>
         </div>
         <div className="card">
-          <h3>Game timeline</h3>
+          <h2>Game timeline</h2>
           <p>Win probability turn by turn, with your critical errors and best decisions marked.</p>
         </div>
       </div>

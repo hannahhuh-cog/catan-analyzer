@@ -77,10 +77,11 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
         <h2>Win probability timeline</h2>
         <p className="muted small">
           Estimated from VP, expected production, cards in hand and dev cards after every turn. Markers are your critical
-          moments: ▲ green = good decision, ▼ red = error, ◆ = luck (dice or robber). Click one for details.
+          moments: ▲ green = good decision, ▼ red = error, ◆ = luck (dice or robber). Select one here or in the list below
+          to mark it on the chart and board.
         </p>
         <ResponsiveContainer width="100%" height={340}>
-          <LineChart data={timeline} margin={{ top: 16, right: 20, left: 0, bottom: 8 }}>
+          <LineChart data={timeline} margin={{ top: 16, right: 16, left: 0, bottom: 8 }} title="Win probability by turn for each player">
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="turn" type="number" domain={[0, 'dataMax']} label={{ value: 'Turn', position: 'insideBottomRight', offset: -4 }} />
             <YAxis domain={[0, 1]} tickFormatter={(v) => pct(v)} />
@@ -121,19 +122,26 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
           <h2>Critical moments</h2>
           <ol className="moments">
             {game.critical.map((m, i) => (
-              <li
-                key={i}
-                className={`moment ${m.kind} ${m.polarity > 0 ? 'up' : 'down'} ${selected === m ? 'selected' : ''}`}
-                onClick={() => setSelected(m)}
-              >
-                <span className="moment-turn">T{m.turn}</span>
-                <div>
-                  <div className="moment-title">
+              <li key={i}>
+                <button
+                  type="button"
+                  className={`moment ${m.kind} ${m.polarity > 0 ? 'up' : 'down'} ${selected === m ? 'selected' : ''}`}
+                  aria-pressed={selected === m}
+                  onClick={() => setSelected(selected === m ? null : m)}
+                >
+                <span className="moment-turn">
+                  <span className="sr-only">Turn </span>
+                  <span aria-hidden="true">T</span>
+                  {m.turn}
+                </span>
+                <span className="moment-body">
+                  <span className="moment-title">
                     <span className="tag">{m.kind === 'luck' ? 'Luck' : m.polarity > 0 ? 'Good decision' : 'Error'}</span>
                     {m.title}
-                  </div>
-                  <div className="moment-detail">{m.detail}</div>
-                </div>
+                  </span>
+                  <span className="moment-detail">{m.detail}</span>
+                </span>
+                </button>
               </li>
             ))}
             {game.critical.length === 0 && <li className="muted">No standout moments in this game.</li>}
@@ -160,7 +168,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
             Cumulative cards received from rolls minus what your buildings should have produced (robber included).
           </p>
           <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={timeline}>
+            <ComposedChart data={timeline} title="Cumulative cards received vs. expected, by turn">
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="turn" type="number" domain={[0, 'dataMax']} />
               <YAxis />
@@ -182,7 +190,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
           <h2>Dice distribution</h2>
           <p className="muted small">All rolls this game vs. the expected 2d6 distribution ({game.luck.sevens} sevens).</p>
           <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={game.dice_histogram}>
+            <ComposedChart data={game.dice_histogram} title="Dice rolls vs. expected 2d6 distribution">
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="total" />
               <YAxis allowDecimals={false} />
@@ -217,13 +225,14 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
 
       <section className="panel">
         <h2>Players</h2>
+        <div className="table-wrap" role="region" aria-label="Players" tabIndex={0}>
         <table className="table">
           <thead>
             <tr>
               <th>Player</th>
               <th>Seat</th>
               <th>Final VP</th>
-              <th>Strategy</th>
+              <th className="opt">Strategy</th>
               <th>Dice z</th>
               <th>Opening pct.</th>
               <th>Decision score</th>
@@ -234,11 +243,16 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
               <tr key={p.color} className={p.color === game.focus ? 'me' : ''}>
                 <td>
                   <span className="swatch" style={{ background: PLAYER_COLORS[p.color] }} /> {p.name}
-                  {p.color === game.winner && ' 🏆'}
+                  {p.color === game.winner && (
+                    <span role="img" aria-label="winner">
+                      {' '}
+                      🏆
+                    </span>
+                  )}
                 </td>
                 <td>{game.play_order.indexOf(p.color) + 1}</td>
                 <td>{p.final_vp}</td>
-                <td>{STRATEGY_LABELS[p.strategy]}</td>
+                <td className="opt">{STRATEGY_LABELS[p.strategy]}</td>
                 <td className={p.luck_z >= 0 ? 'pos' : 'neg'}>{signed(p.luck_z)}</td>
                 <td>{pct(p.setup_pct)}</td>
                 <td>{p.decision_score}</td>
@@ -246,6 +260,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
             ))}
           </tbody>
         </table>
+        </div>
       </section>
     </div>
   )
@@ -278,7 +293,7 @@ function Meter({ label, value }: { label: string; value: number | null }) {
         <span>{label}</span>
         <span>{value == null ? 'n/a' : pct(value)}</span>
       </div>
-      <div className="meter-track">
+      <div className="meter-track" role="presentation">
         <div className="meter-fill" style={{ width: `${(value ?? 0) * 100}%` }} />
       </div>
     </div>
