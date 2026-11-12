@@ -75,24 +75,28 @@ export default function App() {
           <img className="brand-mark" src="/favicon.svg" alt="" width={24} height={24} />
           Catan Analyzer
         </a>
-        <form className="search" onSubmit={submit}>
-          <input
-            aria-label="Colonist.io username"
-            placeholder="Colonist.io username"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            maxLength={40}
-          />
-          <button type="submit" disabled={!query.trim()}>
-            Analyze
-          </button>
-          <button type="button" className="secondary" onClick={() => go('/demo')}>
-            Demo
-          </button>
-        </form>
+        {route.kind !== 'home' && (
+          <form className="search" onSubmit={submit}>
+            <input
+              aria-label="Colonist.io username"
+              placeholder="Colonist.io username"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              maxLength={40}
+            />
+            <button type="submit" disabled={!query.trim()}>
+              Analyze
+            </button>
+            <button type="button" className="secondary" onClick={() => go('/demo')}>
+              Demo
+            </button>
+          </form>
+        )}
       </header>
       <main className="content">
-        {route.kind === 'home' && <Home onDemo={() => go('/demo')} />}
+        {route.kind === 'home' && (
+          <Home query={query} setQuery={setQuery} onSubmit={submit} onDemo={() => go('/demo')} />
+        )}
         {loading && <div className="state">Loading{route.kind === 'profile' ? ` ${route.user}'s games from Colonist.io` : ''}...</div>}
         {error && !loading && (
           <div className="state error" role="alert">
@@ -117,14 +121,37 @@ export default function App() {
   )
 }
 
-function Home({ onDemo }: { onDemo: () => void }) {
+type HomeProps = {
+  query: string
+  setQuery: (q: string) => void
+  onSubmit: (e: React.FormEvent) => void
+  onDemo: () => void
+}
+
+function Home({ query, setQuery, onSubmit, onDemo }: HomeProps) {
   return (
     <section className="home">
       <h1>Did you lose to the dice, or to your decisions?</h1>
       <p className="lede">
-        Enter a Colonist.io username to analyze their recent games: win rate by placement order, player count and game
-        length, compared against what seat luck alone would predict. Open the demo to see the full per-game analysis:
-        luck vs. decision scores, a win-probability timeline with critical moments, and strategy strengths.
+        Enter your Colonist.io username to see how often you win, where you win and lose, and how that compares to what
+        seat count alone would predict.
+      </p>
+      <form className="hero-search" onSubmit={onSubmit}>
+        <input
+          aria-label="Colonist.io username"
+          placeholder="Your Colonist.io username"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          maxLength={40}
+          autoFocus
+        />
+        <button type="submit" className="primary-lg" disabled={!query.trim()}>
+          Analyze my games
+        </button>
+      </form>
+      <p className="muted small hero-hint">
+        The name shown on your Colonist.io profile, including any #1234 tag. Capitalization doesn't matter. Uses
+        Colonist's public game history: no login needed.
       </p>
       <div className="home-cards">
         <div className="card">
@@ -132,17 +159,24 @@ function Home({ onDemo }: { onDemo: () => void }) {
           <p>Up to 100 recent games from Colonist.io's public history: no login needed.</p>
         </div>
         <div className="card">
-          <h3>Luck vs. strategy</h3>
+          <h3>
+            Luck vs. strategy <span className="demo-tag">Demo</span>
+          </h3>
           <p>Actual dice income vs. what your buildings should produce, robber damage, and decision quality.</p>
         </div>
         <div className="card">
-          <h3>Game timeline</h3>
+          <h3>
+            Game timeline <span className="demo-tag">Demo</span>
+          </h3>
           <p>Win probability turn by turn, with your critical errors and best decisions marked.</p>
         </div>
       </div>
-      <button className="primary-lg" onClick={onDemo}>
-        Open the demo profile
-      </button>
+      <p className="muted">
+        Per-game luck and decision analysis needs full replays, which Colonist only shares with logged-in players.{' '}
+        <button type="button" className="link inline" onClick={onDemo}>
+          See it on the demo profile
+        </button>
+      </p>
     </section>
   )
 }

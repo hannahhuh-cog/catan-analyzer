@@ -232,9 +232,16 @@ def aggregate(games: list[dict]) -> dict:
     rivals.sort(key=lambda r: -r["games"])
 
     avg_vp_share = sum(min(1.0, g["points"] / g["vp_to_win"]) for g in played) / len(played)
+    starts = [g["start_ms"] for g in played if g["start_ms"]]
     return {
         "overall": {
             **base,
+            "fetched": len(games),
+            "unfinished": len(games) - len(played),
+            "bot_games": sum(1 for g in played if g["bots"]),
+            "play_order_known": sum(1 for g in played if g["play_order"] is not None),
+            "first_ms": min(starts, default=0),
+            "last_ms": max(starts, default=0),
             "skill_ratio": round(skill, 2),
             "avg_vp_share": round(avg_vp_share, 3),
             "quits": quits,
@@ -268,8 +275,22 @@ def _insight(kind: str, dim: str, row: dict, delta: float) -> dict:
     }
 
 
+def _display_name(username: str, user_id: str | None, raw_games: list[dict]) -> str:
+    """The username as Colonist spells it (lookups are case-insensitive)."""
+    for raw in raw_games:
+        for p in raw.get("players") or []:
+            if user_id and str(p.get("userId")) == str(user_id) and p.get("username"):
+                return str(p["username"])
+    return username
+
+
 def build_profile(username: str, data: dict) -> dict:
     user_id = data.get("profileUserId")
     games = [g for g in (normalize_game(r, username, user_id) for r in data.get("gameDatas") or []) if g]
     games.sort(key=lambda g: -g["start_ms"])
-    return {"username": username, "source": "colonist", "games": games, "stats": aggregate(games)}
+    return {
+        "username": _display_name(username, user_id, data.get("gameDatas") or []),
+        "source": "colonist",
+        "games": games,
+        "stats": aggregate(games),
+    }
