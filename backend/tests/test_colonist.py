@@ -130,3 +130,65 @@ def test_build_profile_single_game():
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
+
+
+def _raw(players, vp=10, finished=True, i=0):
+    return {
+        "id": str(i),
+        "setting": {"victoryPointsToWin": vp, "mapSetting": 0, "modeSetting": 0, "diceSetting": 0, "eloType": 0},
+        "finished": finished,
+        "turnCount": 60,
+        "startTime": str(1_700_000_000_000 + i * 1000),
+        "duration": "1800000",
+        "players": players,
+    }
+
+
+def test_forfeit_counts_as_loss_and_abandoned_game_is_dropped():
+    me_left = {**_player("1", "Me", 2, 4, 1), "finished": False}
+    forfeit = _raw([me_left, _player("2", "Opp", 1, 7, 2)], vp=15, i=1)
+    abandoned = _raw([_player("1", "Me", 1, 3, 1), _player("2", "Opp", 2, 2, 2)], vp=15, finished=False, i=2)
+    won = _raw([_player("1", "Me", 1, 15, 1), _player("2", "Opp", 2, 10, 2)], vp=15, i=3)
+    s = build_profile("me", {"profileUserId": "1", "gameDatas": [forfeit, abandoned, won]})["stats"]["overall"]
+    assert (s["games"], s["wins"], s["left"]) == (2, 1, 1)
+
+
+def test_bot_games_are_left_out_of_the_level():
+    raw = []
+    for i in range(30):
+        bots = i < 20
+        me_rank = 1 if bots else (1 if i % 4 == 0 else 3)
+        ps = [_player("1", "Me", me_rank, 10 if me_rank == 1 else 7, 1)]
+        for k, r in enumerate(r for r in range(1, 5) if r != me_rank):
+            ps.append(_player(str(10 + k), "Bot" if bots else f"Opp{k}", r, 10 if r == 1 else 6, k + 2, human=not bots))
+        raw.append(_raw(ps, i=i))
+    s = build_profile("me", {"profileUserId": "1", "gameDatas": raw})["stats"]
+    assert s["overall"]["games"] == 10 and s["overall"]["bot_games_excluded"] == 20
+    assert s["insights"][0]["kind"] != "strength"
+    assert any("games with bots" in i["title"] for i in s["insights"])
+
+
+def test_close_losses_are_judged_against_the_table():
+    # Every loss is a 4th place 2 VP behind, but so is every other loser: nothing unusual.
+    raw = []
+    for i in range(20):
+        me_rank = 1 if i % 4 == 0 else 2
+        ps = [_player("1", "Me", me_rank, 10 if me_rank == 1 else 8, 1)]
+        for k, r in enumerate(r for r in range(1, 5) if r != me_rank):
+            ps.append(_player(str(10 + k), f"Opp{k}", r, 10 if r == 1 else 8, k + 2))
+        raw.append(_raw(ps, i=i))
+    ins = build_profile("me", {"profileUserId": "1", "gameDatas": raw})["stats"]["insights"]
+    close = next(i for i in ins if "VP of the winner" in i["title"])
+    assert close["kind"] == "info"
+
+
+def test_profile_reports_data_coverage():
+    raw = [_game(i, 1 if i % 3 == 0 else 2, 1 if i < 4 else None) for i in range(12)]
+    raw[0]["finished"] = False
+    p = build_profile("ME", {"profileUserId": "1", "gameDatas": raw})
+    assert p["username"] == "Me"
+    o = p["stats"]["overall"]
+    assert o["fetched"] == 12 and o["unfinished"] == 1 and o["games"] == 11
+    assert o["bot_games"] == 11
+    assert o["play_order_known"] == 3
+    assert o["first_ms"] == 1_700_000_001_000 and o["last_ms"] == 1_700_000_011_000

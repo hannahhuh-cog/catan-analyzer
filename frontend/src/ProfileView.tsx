@@ -15,17 +15,19 @@ import {
   YAxis,
   ZAxis,
 } from 'recharts'
-import { pct, signed, STRATEGY_LABELS, timeAgo, VERDICT_TONE } from './format'
+import { daysSince, LOSS_VERDICTS, monthYear, pct, signed, sinceText, STRATEGY_LABELS, timeAgo, VERDICT_TONE, zText } from './format'
 import type { Bucket, GameSummary, Insight, Profile } from './types'
 
 const DIMENSIONS: [string, string][] = [
   ['play_order', 'Win rate by placement order'],
   ['player_count', 'Win rate by player count'],
-  ['duration', 'Win rate by game length'],
+  ['length', 'Win rate by game length'],
   ['vp_target', 'Win rate by VP target'],
+  ['ranked', 'Win rate: ranked vs casual'],
+  ['dice', 'Win rate by dice type'],
 ]
 
-const MIN_SAMPLE = 5
+const MIN_SAMPLE = 8
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -42,9 +44,7 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
           <p className="muted">
             {profile.source === 'demo'
               ? 'Demo profile: 40 simulated games with full replays, analyzed end to end.'
-              : `Last ${plural(games.length, 'game')} from the Colonist.io public profile history${
-                  o.games < games.length ? `; ${o.games} completed ${o.games === 1 ? 'counts' : 'count'} toward the stats` : ''
-                }.`}
+              : coverageText(o)}
           </p>
           {profile.source === 'colonist' && o.games < MIN_SAMPLE && (
             <p className="notice small">
@@ -55,12 +55,27 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
         </div>
       </div>
 
+      {profile.source === 'colonist' && <DataNotes profile={profile} />}
+
       <div className="kpis">
-        <Kpi label="Games" value={String(o.games)} />
+        <Kpi
+          label="Games"
+          value={String(o.games)}
+          sub={o.bot_games_excluded ? `vs humans; ${o.bot_games_excluded} bot games left out` : undefined}
+        />
         <Kpi label="Win rate" value={pct(o.win_rate)} sub={`${pct(o.expected_rate)} expected by seat count`} />
-        <Kpi label="Vs. average player" value={`${o.skill_ratio.toFixed(2)}x`} sub={`z = ${signed(o.z ?? 0)}`} />
+        <Kpi
+          label="Vs. average player"
+          value={`${o.skill_ratio.toFixed(2)}x`}
+          sub={zText(o.z ?? 0)}
+          title={`Wins relative to an average player in the same games (z = ${signed(o.z ?? 0)})`}
+        />
         <Kpi label="Average finish" value={o.avg_rank.toFixed(2)} sub="1 = first place" />
-        <Kpi label="Close losses" value={`${o.close_losses}/${o.losses}`} sub="within 2 VP of the winner" />
+        <Kpi
+          label="Close losses"
+          value={`${o.close_losses}/${o.margin_losses ?? o.losses}`}
+          sub="within 2 VP of the winner (3 at 15 VP)"
+        />
         {deep && <Kpi label="Losses mostly RNG" value={rngLosses(deep.verdicts)} sub="out-decided the table, dice ran cold" />}
       </div>
 
@@ -120,8 +135,13 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
       <div className="grid-2">
         {DIMENSIONS.map(([key, title]) => {
           const rows = stats.breakdowns[key] ?? []
-          if (!rows.length) return null
-          return <BreakdownChart key={key} title={title} rows={rows} />
+          if (rows.length < 2) return null
+          const known = o.play_order_known
+          const note =
+            key === 'play_order' && known != null && known < o.games
+              ? `Colonist only records placement order for ${known} of these ${o.games} games.`
+              : undefined
+          return <BreakdownChart key={key} title={title} rows={rows} note={note} />
         })}
       </div>
 
@@ -175,16 +195,70 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
 }
 
 function rngLosses(v: Record<string, number>) {
-  const losses = ['Lost to RNG', 'Unlucky and outplayed', 'Unlucky loss', 'Outplayed', 'Strategic loss', 'Close call'].reduce(
+  const losses = LOSS_VERDICTS.reduce(
     (s, k) => s + (v[k] ?? 0),
     0,
   )
   return `${v['Lost to RNG'] ?? 0}/${losses}`
 }
 
-function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
+type Overall = Profile['stats']['overall']
+
+function coverageText(o: Overall) {
+  const range =
+    o.first_ms && o.last_ms
+      ? o.first_ms === o.last_ms || monthYear(o.first_ms) === monthYear(o.last_ms)
+        ? ` from ${monthYear(o.last_ms)}`
+        : ` from ${monthYear(o.first_ms)} to ${monthYear(o.last_ms)}`
+      : ''
+  const skipped = o.unfinished
+    ? ` ${o.unfinished} unfinished ${o.unfinished === 1 ? 'game is' : 'games are'} listed but not counted.`
+    : ''
+  return `Based on ${o.games} finished ${o.games === 1 ? 'game' : 'games'}${range} from Colonist.io's public profile history.${skipped}`
+}
+
+const SMALL_SAMPLE = 30
+const STALE_DAYS = 180
+
+function DataNotes({ profile }: { profile: Profile }) {
+  const o = profile.stats.overall
+  const notes: string[] = []
+  if (o.games < SMALL_SAMPLE) {
+    notes.push(
+      `Only ${o.games} games: one or two results can move these percentages a lot, so read strengths and weaknesses as hints, not verdicts.`,
+    )
+  }
+  const bots = o.bot_games ?? 0
+  if (bots && bots / o.games >= 0.25) {
+    const humans = (profile.stats.breakdowns.opponents ?? []).find((r) => r.key === 'humans')
+    notes.push(
+      `${bots} of ${o.games} games included bots, which are easier to beat than people.` +
+        (humans
+          ? ` Against humans only: ${pct(humans.win_rate)} wins in ${humans.games} ${humans.games === 1 ? 'game' : 'games'}.`
+          : ' None were against humans only.'),
+    )
+  }
+  if (o.last_ms && daysSince(o.last_ms) > STALE_DAYS) {
+    notes.push(
+      `The latest game in this history is from ${timeAgo(o.last_ms)} (${sinceText(o.last_ms)}), so this may not reflect how ${profile.username} plays today.`,
+    )
+  }
+  if (!notes.length) return null
   return (
-    <div className="kpi">
+    <div className="data-notes" role="note">
+      <strong>Before you read the numbers</strong>
+      <ul>
+        {notes.map((n) => (
+          <li key={n}>{n}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function Kpi({ label, value, sub, title }: { label: string; value: string; sub?: string; title?: string }) {
+  return (
+    <div className="kpi" title={title}>
       <div className="kpi-label">{label}</div>
       <div className="kpi-value">{value}</div>
       {sub && <div className="kpi-sub">{sub}</div>}
@@ -203,12 +277,13 @@ function InsightCard({ insight }: { insight: Insight }) {
   )
 }
 
-function BreakdownChart({ title, rows }: { title: string; rows: Bucket[] }) {
+function BreakdownChart({ title, rows, note }: { title: string; rows: Bucket[]; note?: string }) {
   const data = rows.map((r) => ({ ...r, label: `${r.label} (${r.games})` }))
   return (
     <section className="panel">
       <h2>{title}</h2>
       <p className="muted small">Bars: your win rate. Grey: what your overall level predicts for these games. (n) = games.</p>
+      {note && <p className="chart-note small">{note}</p>}
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -270,14 +345,22 @@ function GamesTable({
               {games.map((g) => (
                 <tr
                   key={g.id}
-                  className={g.analyzed ? 'clickable' : ''}
+                  className={g.analyzed ? 'clickable' : g.finished === false && !g.quit ? 'not-counted' : ''}
                   onClick={() => g.analyzed && onOpenGame(g.id)}
                   tabIndex={g.analyzed ? 0 : undefined}
                   onKeyDown={(e) => e.key === 'Enter' && g.analyzed && onOpenGame(g.id)}
                 >
                   <td>{timeAgo(g.start_ms)}</td>
                   <td>
-                    <span className={`pill ${g.won ? 'win' : 'loss'}`}>{g.won ? 'Won' : g.quit ? 'Quit' : `#${g.rank}`}</span>
+                    {g.finished === false && !g.quit ? (
+                      <span className="pill" title="Game never finished: not counted in the stats">
+                        Unfinished
+                      </span>
+                    ) : (
+                      <span className={`pill ${g.won ? 'win' : 'loss'}`}>
+                        {g.won ? 'Won' : g.quit ? 'Quit' : `#${g.rank}`}
+                      </span>
+                    )}
                   </td>
                   <td>
                     {g.points}/{g.winner_points}

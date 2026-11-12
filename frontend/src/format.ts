@@ -35,6 +35,15 @@ export const VERDICT_TONE: Record<string, 'good' | 'bad' | 'luck' | 'neutral'> =
   'Close call': 'neutral',
 }
 
+export const LOSS_VERDICTS = [
+  'Lost to RNG',
+  'Unlucky loss',
+  'Unlucky and outplayed',
+  'Outplayed',
+  'Strategic loss',
+  'Close call',
+]
+
 export const RESOURCE_COLORS: Record<string, string> = {
   lumber: '#4d7c0f',
   brick: '#b45309',
@@ -48,4 +57,28 @@ export function timeAgo(ms: number) {
   if (!ms) return ''
   const d = new Date(ms)
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+export function monthYear(ms: number) {
+  return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
+}
+
+export function daysSince(ms: number) {
+  return (Date.now() - ms) / 86_400_000
+}
+
+export function sinceText(ms: number) {
+  const days = daysSince(ms)
+  if (days < 60) return `${Math.max(1, Math.round(days))} days ago`
+  if (days < 730) return `${Math.round(days / 30)} months ago`
+  return `${Math.round(days / 365)} years ago`
+}
+
+/** Plain-language read of a z-score so first-time users know whether a gap is real. */
+export function zText(z: number) {
+  if (z >= 2) return 'Clearly above average'
+  if (z >= 1) return 'Probably above average'
+  if (z <= -2) return 'Clearly below average'
+  if (z <= -1) return 'Probably below average'
+  return 'Too close to call: could be luck'
 }
