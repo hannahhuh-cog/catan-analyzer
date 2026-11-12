@@ -388,7 +388,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
 
 const COMPONENT_LABELS: Record<string, string> = {
   opening: 'Opening placements',
-  tempo: 'Tempo (time at or above median VP)',
+  tempo: 'Tempo (time at or above median VP; outcome, not scored)',
   robber: 'Robber targeting (hit the leader)',
   hand_management: 'Hand management (no 7 discards)',
   awards: 'Longest Road / Largest Army',
