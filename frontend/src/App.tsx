@@ -114,6 +114,11 @@ export default function App() {
         {route.kind !== 'home' && (
           <form className="search" onSubmit={submit}>
             <input
+              type="search"
+              enterKeyHint="search"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
               aria-label="Colonist.io username"
               placeholder="Colonist.io username"
               value={query}
@@ -184,6 +189,11 @@ function Home({ query, setQuery, onSubmit, onDemo }: HomeProps) {
       </p>
       <form className="hero-search" onSubmit={onSubmit}>
         <input
+          type="search"
+          enterKeyHint="search"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
           aria-label="Colonist.io username"
           placeholder="Your Colonist.io username"
           value={query}
@@ -201,19 +211,19 @@ function Home({ query, setQuery, onSubmit, onDemo }: HomeProps) {
       </p>
       <div className="home-cards">
         <div className="card">
-          <h3>Profile analysis</h3>
+          <h2>Profile analysis</h2>
           <p>Up to 100 recent games from Colonist.io's public history: no login needed.</p>
         </div>
         <div className="card">
-          <h3>
+          <h2>
             Luck vs. strategy <span className="demo-tag">Demo</span>
-          </h3>
+          </h2>
           <p>Actual dice income vs. what your buildings should produce, robber damage, and decision quality.</p>
         </div>
         <div className="card">
-          <h3>
+          <h2>
             Game timeline <span className="demo-tag">Demo</span>
-          </h3>
+          </h2>
           <p>Win probability turn by turn, with your critical errors and best decisions marked.</p>
         </div>
       </div>

@@ -60,6 +60,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
     for (const s of swings) if (s.moment == null) items.push({ m: s, swing: s, impact: s.wp_delta })
     return items.sort((a, b) => a.m.turn - b.m.turn)
   }, [game])
+  const [chartWidth, setChartWidth] = useState(0)
   const highlights = useMemo(() => {
     const scored = keyMoments.filter((k) => k.impact != null && Math.sign(k.impact) === k.m.polarity && Math.abs(k.impact) >= 0.005)
     const pick = (f: (k: KeyMoment) => boolean, dir: 1 | -1) =>
@@ -79,14 +80,36 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
     const luck = Math.round(imp.luck * 100)
     return { decision, luck, opponent: net - decision - luck } as Record<Cause, number>
   }, [game])
-  const wpAt = (turn: number) => {
-    let v = game.timeline[0]?.[wpKey] ?? 0
-    for (const r of game.timeline) {
-      if (r.turn <= turn) v = r[wpKey]
-      else break
+  const wpAt = (turn: number) => wpAtTurn(game.timeline, wpKey, turn)
+
+  const markerLayout = useMemo(() => {
+    const maxTurn = Math.max(1, ...game.timeline.map((r) => r.turn))
+    const plotW = Math.max(0, chartWidth - TIMELINE_X_INSET)
+    const plotH = TIMELINE_HEIGHT - TIMELINE_Y_INSET - (chartWidth < 500 ? 48 : 24)
+    const scale = chartWidth ? Math.max(0.6, Math.min(1, plotW / 600)) : 1
+    const placed: { x: number; y: number; r: number }[] = []
+    const out: { dy: number; r: number }[] = []
+    const order = keyMoments.map((_, i) => i).sort((a, b) => Math.abs(keyMoments[b].impact ?? 0) - Math.abs(keyMoments[a].impact ?? 0))
+    for (const i of order) {
+      const k = keyMoments[i]
+      const r = markerSize(k) * scale
+      const hit = r * (k.m.kind === 'decision' ? 1 : 1.2) + 1
+      const wp = wpAtTurn(game.timeline, wpKey, k.m.turn)
+      const x = (k.m.turn / maxTurn) * plotW
+      const y = (1 - wp) * plotH
+      const toward = wp > 0.5 ? 1 : -1
+      let dy = 0
+      for (let step = 0; step <= 100; step++) {
+        const cand = step === 0 ? 0 : (step % 2 ? toward : -toward) * Math.ceil(step / 2) * 3
+        if (step > 0 && (y + cand < hit || y + cand > plotH - hit)) continue
+        dy = cand
+        if (!placed.some((p) => Math.hypot(p.x - x, p.y - (y + dy)) < p.r + hit + 1)) break
+      }
+      placed.push({ x, y: y + dy, r: hit })
+      out[i] = { dy, r }
     }
-    return v
-  }
+    return out
+  }, [keyMoments, chartWidth, game, wpKey])
 
   return (
     <div className="game">
@@ -145,10 +168,11 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
           <span><CauseIcon cause="opponent" polarity={1} /> <CauseIcon cause="opponent" polarity={-1} /> opponent&apos;s move</span>
           <span>green = helped you, red = hurt you, bigger = larger swing · click a marker for details</span>
         </div>
-        <ResponsiveContainer width="100%" height={340}>
+        <ResponsiveContainer width="100%" height={TIMELINE_HEIGHT} onResize={(w) => setChartWidth(w)}>
           <LineChart
             data={timeline}
-            margin={{ top: 16, right: 20, left: 0, bottom: 8 }}
+            margin={{ top: 16, right: 16, left: 0, bottom: 8 }}
+            title="Win probability by turn for each player"
             onClick={(state) => {
               const turn = Number(state?.activeLabel)
               if (!Number.isFinite(turn) || keyMoments.length === 0) return
@@ -201,8 +225,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
               />
             ))}
             {keyMoments.map((k, i) => {
-              const stack = keyMoments.slice(0, i).filter((o) => o.m.turn === k.m.turn).length
-              const size = 7 + 7 * Math.min(1, Math.abs(k.impact ?? 0.1) / 0.35)
+              const { dy, r: size } = markerLayout[i] ?? { dy: 0, r: markerSize(k) }
               return (
                 <ReferenceDot
                   key={i}
@@ -216,12 +239,18 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
                       className="moment-marker"
                       role="button"
                       aria-label={`Turn ${k.m.turn}: ${k.m.title}`}
-                      transform={`translate(${props.cx ?? 0},${(props.cy ?? 0) + (stack ? (wpAt(k.m.turn) > 0.5 ? 1 : -1) * stack * 22 : 0)})`}
+                      transform={`translate(${props.cx ?? 0},${(props.cy ?? 0) + dy})`}
                       onClick={(e) => {
                         e.stopPropagation()
                         setSelected(k)
                       }}
                     >
+                      {Math.abs(dy) > 3 && (
+                        <g pointerEvents="none">
+                          <line x1={0} y1={0} x2={0} y2={-dy} stroke="#6b7280" strokeWidth={1.25} />
+                          <circle cx={0} cy={-dy} r={2.5} fill="#6b7280" />
+                        </g>
+                      )}
                       <CauseShape cause={k.m.kind} polarity={k.m.polarity} size={size} selected={selected === k} />
                     </g>
                   )}
@@ -237,36 +266,45 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
           <h2>Key moments</h2>
           <ol className="moments">
             {keyMoments.map((k, i) => (
-              <li
-                key={i}
-                className={`moment cause-${k.m.kind} ${k.m.polarity > 0 ? 'up' : 'down'} ${selected === k ? 'selected' : ''}`}
-                onClick={() => setSelected(k)}
-              >
-                <span className="moment-turn">T{k.m.turn}</span>
-                <div className="moment-body">
-                  <div className="moment-title">
-                    <span className="tag">
-                      {CAUSE_LABEL[k.m.kind]} · {POLARITY_LABEL[k.m.kind][k.m.polarity > 0 ? 0 : 1]}
-                    </span>
-                    {k.m.title}
-                  </div>
-                  {k.m.detail && <div className="moment-detail">{k.m.detail}</div>}
-                  {k.swing && <div className="moment-detail">{swingText(k.swing)}</div>}
-                  {k.impact == null && k.m.turn === 0 && <div className="moment-detail">Opening choice: its cost shows up over the whole game, not on one turn.</div>}
-                </div>
-                {k.impact != null && (
-                  <span
-                    className={`impact ${Math.sign(k.impact) !== k.m.polarity ? 'mixed' : k.impact >= 0 ? 'pos' : 'neg'}`}
-                    title={
-                      Math.sign(k.impact) !== k.m.polarity
-                        ? 'Net change in your win chance: other effects of the same turn outweighed this one'
-                        : 'Change in your win chance, percentage points'
-                    }
-                  >
-                    {Math.sign(k.impact) !== k.m.polarity && 'net '}
-                    {pts(k.impact)}
+              <li key={i}>
+                <button
+                  type="button"
+                  className={`moment cause-${k.m.kind} ${k.m.polarity > 0 ? 'up' : 'down'} ${selected === k ? 'selected' : ''}`}
+                  aria-pressed={selected === k}
+                  onClick={() => setSelected(selected === k ? null : k)}
+                >
+                  <span className="moment-turn">
+                    <span className="sr-only">Turn </span>
+                    <span aria-hidden="true">T</span>
+                    {k.m.turn}
                   </span>
-                )}
+                  <span className="moment-body">
+                    <span className="moment-title">
+                      <span className="tag">
+                        {CAUSE_LABEL[k.m.kind]} · {POLARITY_LABEL[k.m.kind][k.m.polarity > 0 ? 0 : 1]}
+                      </span>
+                      {k.m.title}
+                    </span>
+                    {k.m.detail && <span className="moment-detail">{k.m.detail}</span>}
+                    {k.swing && <span className="moment-detail">{swingText(k.swing)}</span>}
+                    {k.impact == null && k.m.turn === 0 && (
+                      <span className="moment-detail">Opening choice: its cost shows up over the whole game, not on one turn.</span>
+                    )}
+                  </span>
+                  {k.impact != null && (
+                    <span
+                      className={`impact ${Math.sign(k.impact) !== k.m.polarity ? 'mixed' : k.impact >= 0 ? 'pos' : 'neg'}`}
+                      title={
+                        Math.sign(k.impact) !== k.m.polarity
+                          ? 'Net change in your win chance: other effects of the same turn outweighed this one'
+                          : 'Change in your win chance, percentage points'
+                      }
+                    >
+                      {Math.sign(k.impact) !== k.m.polarity && 'net '}
+                      {pts(k.impact)}
+                    </span>
+                  )}
+                </button>
               </li>
             ))}
             {keyMoments.length === 0 && <li className="muted">No standout moments in this game.</li>}
@@ -293,7 +331,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
             Cumulative cards received from rolls minus what your buildings should have produced (robber included).
           </p>
           <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={timeline}>
+            <ComposedChart data={timeline} title="Cumulative cards received vs. expected, by turn">
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="turn" type="number" domain={[0, 'dataMax']} />
               <YAxis />
@@ -315,7 +353,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
           <h2>Dice distribution</h2>
           <p className="muted small">All rolls this game vs. the expected 2d6 distribution ({game.luck.sevens} sevens).</p>
           <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={game.dice_histogram}>
+            <ComposedChart data={game.dice_histogram} title="Dice rolls vs. expected 2d6 distribution">
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="total" />
               <YAxis allowDecimals={false} />
@@ -350,14 +388,14 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
 
       <section className="panel">
         <h2>Players</h2>
-        <div className="table-wrap">
+        <div className="table-wrap" role="region" aria-label="Players" tabIndex={0}>
         <table className="table">
           <thead>
             <tr>
               <th>Player</th>
               <th>Seat</th>
               <th>Final VP</th>
-              <th>Strategy</th>
+              <th className="opt">Strategy</th>
               <th>Dice z</th>
               <th>Opening pct.</th>
               <th>Decision score</th>
@@ -368,11 +406,16 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
               <tr key={p.color} className={p.color === game.focus ? 'me' : ''}>
                 <td>
                   <span className="swatch" style={{ background: PLAYER_COLORS[p.color] }} /> {p.name}
-                  {p.color === game.winner && ' 🏆'}
+                  {p.color === game.winner && (
+                    <span role="img" aria-label="winner">
+                      {' '}
+                      🏆
+                    </span>
+                  )}
                 </td>
                 <td>{game.play_order.indexOf(p.color) + 1}</td>
                 <td>{p.final_vp}</td>
-                <td>{STRATEGY_LABELS[p.strategy]}</td>
+                <td className="opt">{STRATEGY_LABELS[p.strategy]}</td>
                 <td className={p.luck_z >= 0 ? 'pos' : 'neg'}>{signed(p.luck_z)}</td>
                 <td>{pct(p.setup_pct)}</td>
                 <td>{p.decision_score}</td>
@@ -413,7 +456,7 @@ function Meter({ label, value }: { label: string; value: number | null }) {
         <span>{label}</span>
         <span>{value == null ? 'n/a' : pct(value)}</span>
       </div>
-      <div className="meter-track">
+      <div className="meter-track" role="presentation">
         <div className="meter-fill" style={{ width: `${(value ?? 0) * 100}%` }} />
       </div>
     </div>
@@ -436,6 +479,25 @@ function swingText(s: Swing) {
   return `Win chance ${pct(s.wp_before)} → ${pct(s.wp_after)} this turn${parts.length > 1 ? ` (${parts.join(', ')})` : ''}.`
 }
 
+const TIMELINE_HEIGHT = 340
+// Timeline LineChart left + right margin plus the default 60px YAxis width.
+const TIMELINE_X_INSET = 0 + 16 + 60
+// Top + bottom margin plus the default 30px XAxis height (the legend is added on top).
+const TIMELINE_Y_INSET = 16 + 8 + 30
+
+function wpAtTurn(timeline: GameAnalysis['timeline'], key: string, turn: number) {
+  let v = timeline[0]?.[key] ?? 0
+  for (const r of timeline) {
+    if (r.turn <= turn) v = r[key]
+    else break
+  }
+  return v
+}
+
+function markerSize(k: KeyMoment) {
+  return 7 + 7 * Math.min(1, Math.abs(k.impact ?? 0.1) / 0.35)
+}
+
 function CauseShape({ cause, polarity, size, selected }: { cause: Cause; polarity: number; size: number; selected?: boolean }) {
   const fill = polarity > 0 ? GOOD : BAD
   const stroke = selected ? '#111827' : '#fff'
@@ -446,7 +508,7 @@ function CauseShape({ cause, polarity, size, selected }: { cause: Cause; polarit
     ) : cause === 'luck' ? (
       <rect x={-r * 0.85} y={-r * 0.85} width={r * 1.7} height={r * 1.7} transform="rotate(45)" fill={fill} stroke={stroke} strokeWidth={2} />
     ) : (
-      <rect x={-r * 0.85} y={-r * 0.85} width={r * 1.7} height={r * 1.7} rx={2} fill="#fff" stroke={fill} strokeWidth={2.5} />
+      <rect x={-r * 0.85} y={-r * 0.85} width={r * 1.7} height={r * 1.7} rx={2} fill="#fff" stroke={selected ? '#111827' : fill} strokeWidth={selected ? 3 : 2.5} />
     )
   const a = r * 0.45
   const arrow = polarity > 0 ? `M${-a},${a * 0.6} L0,${-a * 0.8} L${a},${a * 0.6} Z` : `M${-a},${-a * 0.6} L0,${a * 0.8} L${a},${-a * 0.6} Z`

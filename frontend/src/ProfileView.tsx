@@ -96,7 +96,10 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
               Right = dice and robber favored you. Up = your decision score beat the table's average. Green = win.
             </p>
             <ResponsiveContainer width="100%" height={300}>
-              <ScatterChart margin={{ top: 10, right: 20, bottom: 30, left: 0 }}>
+              <ScatterChart
+                margin={{ top: 10, right: 16, bottom: 30, left: 0 }}
+                title="Luck index vs. decision edge for every game"
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" dataKey="luck" name="Luck index" domain={[-3, 3]} label={{ value: 'Luck index (SD)', position: 'bottom' }} />
                 <YAxis type="number" dataKey="decision" name="Decision edge" label={{ value: 'Decision edge', angle: -90, position: 'insideLeft' }} />
@@ -120,10 +123,10 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
             <h2>Win rate by strategy</h2>
             <p className="muted small">Strategy is inferred from what you built: cities, settlements and roads, or dev cards.</p>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={deep.strategies} layout="vertical" margin={{ left: 40, right: 20 }}>
+              <BarChart data={deep.strategies} layout="vertical" margin={{ left: 0, right: 36 }} title="Win rate by strategy">
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" domain={[0, 1]} tickFormatter={(v) => pct(v)} />
-                <YAxis type="category" dataKey="label" width={150} />
+                <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(v) => pct(Number(v))} />
                 <Bar dataKey="win_rate" name="Win rate" fill="#2563eb" label={{ position: 'right', formatter: (v: unknown) => pct(Number(v)) }} />
               </BarChart>
@@ -150,7 +153,7 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
           <h2>Form over time</h2>
           <p className="muted small">Rolling 10-game win rate vs. what you'd expect from seat count alone.</p>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={stats.trend}>
+            <LineChart data={stats.trend} title="Rolling 10-game win rate vs. seat baseline">
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="index" />
               <YAxis domain={[0, 1]} tickFormatter={(v) => pct(v)} />
@@ -166,6 +169,7 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
       {stats.opponents.length > 0 && (
         <section className="panel">
           <h2>Frequent opponents</h2>
+          <div className="table-wrap" role="region" aria-label="Frequent opponents" tabIndex={0}>
           <table className="table">
             <thead>
               <tr>
@@ -186,6 +190,7 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
               ))}
             </tbody>
           </table>
+          </div>
         </section>
       )}
 
@@ -284,10 +289,10 @@ function BreakdownChart({ title, rows, note }: { title: string; rows: Bucket[]; 
       <h2>{title}</h2>
       <p className="muted small">Bars: your win rate. Grey: what your overall level predicts for these games. (n) = games.</p>
       {note && <p className="chart-note small">{note}</p>}
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={data}>
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={data} title={title} margin={{ top: 5, right: 8, bottom: 5, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+          <XAxis dataKey="label" interval={0} height={44} tick={<WrappedTick />} />
           <YAxis domain={[0, 1]} tickFormatter={(v) => pct(v)} />
           <Tooltip formatter={(v) => pct(Number(v))} />
           <Legend />
@@ -320,22 +325,22 @@ function GamesTable({
       {games.length === 0 ? (
         <div className="state">No games.</div>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap" role="region" aria-label="Games" tabIndex={0}>
           <table className="table">
             <thead>
               <tr>
                 <th>Date</th>
                 <th>Result</th>
+                {source === 'demo' && <th>Verdict</th>}
                 <th>VP</th>
-                <th>Seat</th>
-                <th>Players</th>
-                <th>Turns</th>
+                <th className="opt">Seat</th>
+                <th className="opt">Players</th>
+                <th className="opt">Turns</th>
                 {source === 'demo' && (
                   <>
-                    <th>Strategy</th>
                     <th>Luck</th>
                     <th>Decision edge</th>
-                    <th>Verdict</th>
+                    <th className="opt">Strategy</th>
                   </>
                 )}
                 <th>Opponents</th>
@@ -347,10 +352,16 @@ function GamesTable({
                   key={g.id}
                   className={g.analyzed ? 'clickable' : g.finished === false && !g.quit ? 'not-counted' : ''}
                   onClick={() => g.analyzed && onOpenGame(g.id)}
-                  tabIndex={g.analyzed ? 0 : undefined}
-                  onKeyDown={(e) => e.key === 'Enter' && g.analyzed && onOpenGame(g.id)}
                 >
-                  <td>{timeAgo(g.start_ms)}</td>
+                  <td>
+                    {g.analyzed ? (
+                      <a href={`#/demo/${encodeURIComponent(g.id)}`} onClick={(e) => e.stopPropagation()}>
+                        {timeAgo(g.start_ms)}
+                      </a>
+                    ) : (
+                      timeAgo(g.start_ms)
+                    )}
+                  </td>
                   <td>
                     {g.finished === false && !g.quit ? (
                       <span className="pill" title="Game never finished: not counted in the stats">
@@ -362,20 +373,22 @@ function GamesTable({
                       </span>
                     )}
                   </td>
+                  {source === 'demo' && (
+                    <td>
+                      <span className={`pill tone-${VERDICT_TONE[g.verdict ?? ''] ?? 'neutral'}`}>{g.verdict}</span>
+                    </td>
+                  )}
                   <td>
                     {g.points}/{g.winner_points}
                   </td>
-                  <td>{g.play_order ?? '-'}</td>
-                  <td>{g.players}</td>
-                  <td>{g.turns}</td>
+                  <td className="opt">{g.play_order ?? '-'}</td>
+                  <td className="opt">{g.players}</td>
+                  <td className="opt">{g.turns}</td>
                   {source === 'demo' && (
                     <>
-                      <td>{STRATEGY_LABELS[g.strategy ?? ''] ?? '-'}</td>
                       <td className={(g.luck_index ?? 0) >= 0 ? 'pos' : 'neg'}>{signed(g.luck_index ?? 0)}</td>
                       <td className={(g.decision_edge ?? 0) >= 0 ? 'pos' : 'neg'}>{signed(g.decision_edge ?? 0, 0)}</td>
-                      <td>
-                        <span className={`pill tone-${VERDICT_TONE[g.verdict ?? ''] ?? 'neutral'}`}>{g.verdict}</span>
-                      </td>
+                      <td className="opt">{STRATEGY_LABELS[g.strategy ?? ''] ?? '-'}</td>
                     </>
                   )}
                   <td className="muted small">{g.opponents.map((p) => p.name).join(', ')}</td>
@@ -386,5 +399,18 @@ function GamesTable({
         </div>
       )}
     </section>
+  )
+}
+
+function WrappedTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  const lines = (payload?.value ?? '').replace(/ to place/, '').split(/ (?=\()/)
+  return (
+    <text x={x} y={y} dy={12} textAnchor="middle" fontSize={12} fill="#4b5563">
+      {lines.map((l, i) => (
+        <tspan key={i} x={x} dy={i ? 14 : 4}>
+          {l}
+        </tspan>
+      ))}
+    </text>
   )
 }
