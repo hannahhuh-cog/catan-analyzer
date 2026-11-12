@@ -604,7 +604,7 @@ def _verdict(won: bool, luck: float, edge: float) -> tuple[str, str]:
     if luck <= -0.5 and edge < 0:
         return "Unlucky and outplayed", "Bad dice made it harder, but opponents also made better decisions."
     if luck <= -0.5:
-        return "Unlucky loss", "Dice ran a bit cold and your decisions were on par with the table."
+        return "Unlucky loss", "Dice ran a bit cold; your decisions matched or beat the table."
     if edge < 0 and luck >= 0.5:
         return "Outplayed", "The dice were on your side; the gap came from decisions."
     if edge < 0:
