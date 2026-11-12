@@ -72,9 +72,7 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <a className="brand" href="#/">
-          <span className="brand-mark" aria-hidden>
-            ⬢
-          </span>
+          <img className="brand-mark" src="/favicon.svg" alt="" width={24} height={24} />
           Catan Analyzer
         </a>
         <form className="search" onSubmit={submit}>
@@ -110,7 +108,10 @@ export default function App() {
       </main>
       <footer className="footer">
         Unofficial tool. Game history comes from Colonist.io's public profile API; not affiliated with Colonist.io or
-        CATAN GmbH.
+        CATAN GmbH.{' '}
+        <a href="https://hannahhuh.devinenterprise.com/sessions/96a3ae48a4d243fd832ede5048b82895" target="_blank" rel="noreferrer">
+          Request changes
+        </a>
       </footer>
     </div>
   )
