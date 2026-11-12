@@ -245,6 +245,12 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
                         setSelected(k)
                       }}
                     >
+                      {Math.abs(dy) > 3 && (
+                        <g pointerEvents="none">
+                          <line x1={0} y1={0} x2={0} y2={-dy} stroke="#6b7280" strokeWidth={1.25} />
+                          <circle cx={0} cy={-dy} r={2.5} fill="#6b7280" />
+                        </g>
+                      )}
                       <CauseShape cause={k.m.kind} polarity={k.m.polarity} size={size} selected={selected === k} />
                     </g>
                   )}
@@ -502,7 +508,7 @@ function CauseShape({ cause, polarity, size, selected }: { cause: Cause; polarit
     ) : cause === 'luck' ? (
       <rect x={-r * 0.85} y={-r * 0.85} width={r * 1.7} height={r * 1.7} transform="rotate(45)" fill={fill} stroke={stroke} strokeWidth={2} />
     ) : (
-      <rect x={-r * 0.85} y={-r * 0.85} width={r * 1.7} height={r * 1.7} rx={2} fill="#fff" stroke={fill} strokeWidth={2.5} />
+      <rect x={-r * 0.85} y={-r * 0.85} width={r * 1.7} height={r * 1.7} rx={2} fill="#fff" stroke={selected ? '#111827' : fill} strokeWidth={selected ? 3 : 2.5} />
     )
   const a = r * 0.45
   const arrow = polarity > 0 ? `M${-a},${a * 0.6} L0,${-a * 0.8} L${a},${a * 0.6} Z` : `M${-a},${-a * 0.6} L0,${a * 0.8} L${a},${-a * 0.6} Z`

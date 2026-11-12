@@ -133,7 +133,7 @@ button.moment:hover:not(:disabled) { background: #f8fafc; }
 .highlight { font: inherit; font-size: 12.5px; text-align: left; color: var(--text); background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
 .highlight:hover:not(:disabled) { background: #eff6ff; border-color: #bfdbfe; }
 .marker-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin-bottom: 4px; }
-.chart-tip { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 2px 8px rgba(0,0,0,.08); max-width: 320px; }
+.chart-tip { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 2px 8px rgba(0,0,0,.08); max-width: min(320px, 60vw); }
 .chart-tip-title { font-weight: 700; margin-bottom: 2px; }
 .chart-tip-moment { margin-top: 4px; border-top: 1px dashed #eef0f2; padding-top: 4px; color: #111827; }
 button.moment.selected { background: #eff6ff; box-shadow: 0 0 0 2px #93c5fd; }
