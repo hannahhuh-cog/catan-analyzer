@@ -10,6 +10,12 @@ from urllib.parse import quote
 
 import httpx
 
+
+def _pct100(x: float) -> int:
+    """Percent rounded half-up, matching the frontend's Math.round."""
+    return int(x * 100 + 0.5)
+
+
 USERNAME_RE = re.compile(r"^[\w#.\- ]{1,40}$")
 HISTORY_URL = "https://colonist.io/api/profile/{username}/history"
 MIN_SAMPLE = 5
@@ -155,7 +161,7 @@ def aggregate(games: list[dict]) -> dict:
     insights = [
         {
             "kind": "strength" if base["z"] >= 1.5 else "weakness" if base["z"] <= -1.5 else "info",
-            "title": f"Overall: {round(base['win_rate'] * 100)}% wins vs {round(base['expected_rate'] * 100)}% expected by seat count",
+            "title": f"Overall: {_pct100(base['win_rate'])}% wins vs {_pct100(base['expected_rate'])}% expected by seat count",
             "detail": f"{skill:.2f}x the win rate of an average player across {base['games']} games (z = {base['z']:+.1f}). "
             "Slices below are compared against your own level, not the seat baseline.",
             "evidence": base,
@@ -245,8 +251,8 @@ def aggregate(games: list[dict]) -> dict:
 
 
 def _insight(kind: str, dim: str, row: dict, delta: float) -> dict:
-    pct = round(row["win_rate"] * 100)
-    base = round(row["expected_rate"] * 100)
+    pct = _pct100(row["win_rate"])
+    base = _pct100(row["expected_rate"])
     titles = {
         "play_order": f"You win {pct}% when you are {row['label']}",
         "player_count": f"{pct}% win rate in {row['label']} games",

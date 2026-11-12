@@ -133,6 +133,8 @@ button.moment.selected { background: #eff6ff; box-shadow: 0 0 0 2px #93c5fd; }
 .meter-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
 .meter-track { height: 8px; background: #eef2f7; border-radius: 4px; overflow: hidden; }
 .meter-fill { height: 100%; background: var(--accent); }
+.moment-marker { cursor: pointer; pointer-events: all; }
+.moment-marker text { pointer-events: none; }
 @media (max-width: 600px) {
   html { scroll-padding-top: 110px; }
   .topbar { padding: 4px 12px 10px; gap: 4px 12px; }
