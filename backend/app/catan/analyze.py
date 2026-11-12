@@ -69,6 +69,7 @@ class Analyzer:
         self.timeline: list[dict] = []
         self.moments: list[dict] = []
         self.robber_since: dict[int, int] = {}
+        self.winner: int | None = None
         self.rolls: list[dict] = []
         self.ev_idx = -1
         self.wp_start: dict[int, float] = {}
@@ -96,6 +97,8 @@ class Analyzer:
         return ps.vp() + (0.55 + 1.4 * late) * prod_round + 0.12 * min(ps.hand, 8) + 0.35 * ps.knights + 0.25 * ps.dev_bought
 
     def win_probs(self) -> dict[int, float]:
+        if self.winner is not None:
+            return {c: float(c == self.winner) for c in self.ps}
         s = {c: self.strength(p) for c, p in self.ps.items()}
         lead = max(p.vp() for p in self.ps.values())
         k = 0.55 + 1.6 * (lead / self.vp_to_win) ** 2
@@ -390,6 +393,9 @@ class Analyzer:
     def on_reveal_vp(self, ev: dict, p: _PS) -> None:
         p.vp_cards = ev["count"]
 
+    def on_game_end(self, ev: dict, p: _PS) -> None:
+        self.winner = p.color
+
     # ----- spend tracking for build events -------------------------------------
     def on_end_turn(self, ev: dict, p: _PS) -> None:
         pass
@@ -682,6 +688,10 @@ def _describe(a: Analyzer, ev: dict, focus: int) -> str:
     who = "You" if actor == focus else a.names.get(actor, "Someone")
     if t == "place":
         return f"{who} built a {ev['piece']}"
+    if t == "game_end":
+        hidden = a.ps[actor].vp_cards if actor in a.ps else 0
+        won = "You won" if actor == focus else f"{who} won"
+        return f"{won}, revealing {hidden} hidden VP card{'s' if hidden != 1 else ''}" if hidden else won
     if t == "award":
         return f"{who} took {'Longest Road' if ev['award'] == 'longest_road' else 'Largest Army'}"
     if t == "buy_dev":

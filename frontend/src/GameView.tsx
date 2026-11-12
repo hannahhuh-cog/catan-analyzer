@@ -55,13 +55,13 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
     const swings = game.swings ?? []
     const items: KeyMoment[] = game.critical.map((m, i) => {
       const swing = swings.find((s) => s.moment === i) ?? null
-      return { m, swing, impact: swing?.wp_delta ?? m.wp_delta ?? null }
+      return { m, swing, impact: m.wp_delta ?? swing?.wp_delta ?? null }
     })
     for (const s of swings) if (s.moment == null) items.push({ m: s, swing: s, impact: s.wp_delta })
     return items.sort((a, b) => a.m.turn - b.m.turn)
   }, [game])
   const highlights = useMemo(() => {
-    const scored = keyMoments.filter((k) => k.impact != null && Math.sign(k.impact) === k.m.polarity)
+    const scored = keyMoments.filter((k) => k.impact != null && Math.sign(k.impact) === k.m.polarity && Math.abs(k.impact) >= 0.005)
     const pick = (f: (k: KeyMoment) => boolean, dir: 1 | -1) =>
       scored.filter(f).sort((a, b) => dir * (b.impact! - a.impact!))[0]
     return [

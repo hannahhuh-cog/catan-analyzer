@@ -47,6 +47,7 @@ def test_swing_attribution_adds_up(games):
         a = analyze_game(g, 1)
         imp = a["impact"]
         assert abs(imp["start"] + imp["decision"] + imp["luck"] + imp["opponent"] - imp["end"]) < 0.01
+        assert imp["end"] == float(a["won"])
         wp = {r["turn"]: r["wp_1"] for r in a["timeline"]}
         for s in a["swings"]:
             assert s["kind"] in ("decision", "luck", "opponent")
