@@ -26,6 +26,7 @@ export type GameSummary = {
   vp_to_win: number
   winner_points: number
   play_order: number | null
+  finished?: boolean
   quit: boolean
   bots: number
   has_replay: boolean
@@ -64,6 +65,12 @@ export type Profile = {
       left?: number
       bot_games_excluded?: number
       avg_rank: number
+      fetched?: number
+      unfinished?: number
+      bot_games?: number
+      play_order_known?: number
+      first_ms?: number
+      last_ms?: number
     }
     breakdowns: Record<string, Bucket[]>
     insights: Insight[]

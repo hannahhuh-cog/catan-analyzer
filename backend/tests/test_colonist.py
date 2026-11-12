@@ -133,3 +133,15 @@ def test_close_losses_are_judged_against_the_table():
     ins = build_profile("me", {"profileUserId": "1", "gameDatas": raw})["stats"]["insights"]
     close = next(i for i in ins if "VP of the winner" in i["title"])
     assert close["kind"] == "info"
+
+
+def test_profile_reports_data_coverage():
+    raw = [_game(i, 1 if i % 3 == 0 else 2, 1 if i < 4 else None) for i in range(12)]
+    raw[0]["finished"] = False
+    p = build_profile("ME", {"profileUserId": "1", "gameDatas": raw})
+    assert p["username"] == "Me"
+    o = p["stats"]["overall"]
+    assert o["fetched"] == 12 and o["unfinished"] == 1 and o["games"] == 11
+    assert o["bot_games"] == 11
+    assert o["play_order_known"] == 3
+    assert o["first_ms"] == 1_700_000_001_000 and o["last_ms"] == 1_700_000_011_000
