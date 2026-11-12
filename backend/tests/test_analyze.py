@@ -50,6 +50,9 @@ def test_expected_income_tracks_actual(games):
 
 def test_verdicts():
     assert _verdict(False, -1.5, 10)[0] == "Lost to RNG"
-    assert _verdict(False, 0.8, 0)[0] == "Outplayed"
+    assert _verdict(False, 0.8, -5)[0] == "Outplayed"
+    assert _verdict(False, 0.8, 10)[0] == "Close call"
+    assert _verdict(False, -0.7, 10)[0] == "Unlucky loss"
+    assert _verdict(False, -0.7, -10)[0] == "Unlucky and outplayed"
     assert _verdict(True, 1.2, -10)[0] == "Lucky win"
     assert _verdict(True, 0.0, 10)[0] == "Earned win"

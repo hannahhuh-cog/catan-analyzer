@@ -137,3 +137,5 @@ button.link.inline { margin: 0; font-size: inherit; }
 .data-notes li + li { margin-top: 4px; }
 .chart-note { color: #92400e; margin: -2px 0 6px; }
 .table tr.not-counted td { color: var(--muted); }
+.moment-marker { cursor: pointer; pointer-events: all; }
+.moment-marker text { pointer-events: none; }

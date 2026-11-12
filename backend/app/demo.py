@@ -10,6 +10,12 @@ from .catan.analyze import STRATEGY_LABELS, analyze_game
 from .catan.sim import COLOR_NAMES, PlayerSpec, simulate
 from .colonist import ORDINAL, aggregate
 
+
+def _pct100(x: float) -> int:
+    """Percent rounded half-up, matching the frontend's Math.round."""
+    return int(x * 100 + 0.5)
+
+
 DEMO_USER = "DemoPlayer"
 OPPONENTS = ["Wheatley", "OreGanizer", "BrickHouse", "SheepThrills", "LongRoadLarry", "KnightRider", "PortAuthority"]
 # The demo player is strong at city rush and weak at expansion, so the
@@ -118,7 +124,7 @@ def deep_stats(games: list[dict]) -> dict:
         insights.append(
             {
                 "kind": "strength",
-                "title": f"{best['label']}: {round(best['win_rate'] * 100)}% wins",
+                "title": f"{best['label']}: {_pct100(best['win_rate'])}% wins",
                 "detail": f"Your best style across {best['games']} games.",
                 "evidence": best,
             }
@@ -127,7 +133,7 @@ def deep_stats(games: list[dict]) -> dict:
         insights.append(
             {
                 "kind": "weakness",
-                "title": f"{worst['label']}: {round(worst['win_rate'] * 100)}% wins",
+                "title": f"{worst['label']}: {_pct100(worst['win_rate'])}% wins",
                 "detail": f"Your weakest style across {worst['games']} games.",
                 "evidence": worst,
             }
@@ -155,7 +161,7 @@ def deep_stats(games: list[dict]) -> dict:
         insights.append(
             {
                 "kind": "info",
-                "title": f"Out-deciding the table: {round(g['win_rate'] * 100)}% wins vs {round(b['win_rate'] * 100)}%",
+                "title": f"Out-deciding the table: {_pct100(g['win_rate'])}% wins vs {_pct100(b['win_rate'])}%",
                 "detail": "Win rate when your decision score beat opponents' by 5+ points vs trailed by 5+.",
                 "evidence": {"ahead": g, "behind": b},
             }
