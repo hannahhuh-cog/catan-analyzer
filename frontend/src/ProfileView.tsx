@@ -25,6 +25,10 @@ const DIMENSIONS: [string, string][] = [
   ['vp_target', 'Win rate by VP target'],
 ]
 
+const MIN_SAMPLE = 5
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
 export default function ProfileView({ profile, onOpenGame }: { profile: Profile; onOpenGame: (id: string) => void }) {
   const { stats, games } = profile
   const o = stats.overall
@@ -38,8 +42,16 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
           <p className="muted">
             {profile.source === 'demo'
               ? 'Demo profile: 40 simulated games with full replays, analyzed end to end.'
-              : `${games.length} most recent Colonist.io games from the public profile history.`}
+              : `Last ${plural(games.length, 'game')} from the Colonist.io public profile history${
+                  o.games < games.length ? `; ${o.games} completed ${o.games === 1 ? 'counts' : 'count'} toward the stats` : ''
+                }.`}
           </p>
+          {profile.source === 'colonist' && o.games < MIN_SAMPLE && (
+            <p className="notice small">
+              Only {plural(o.games, 'game')} to go on, so these numbers are mostly noise. Patterns by seat, player count
+              and game length show up after {MIN_SAMPLE}+ games in a slice.
+            </p>
+          )}
         </div>
       </div>
 

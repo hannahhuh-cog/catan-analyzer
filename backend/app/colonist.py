@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 from collections import Counter, defaultdict
 from typing import Any
@@ -11,7 +12,7 @@ from urllib.parse import quote
 import httpx
 
 USERNAME_RE = re.compile(r"^[\w#.\- ]{1,40}$")
-HISTORY_URL = "https://colonist.io/api/profile/{username}/history"
+HISTORY_URL = os.environ.get("COLONIST_HISTORY_URL", "https://colonist.io/api/profile/{username}/history")
 MIN_SAMPLE = 5
 
 
@@ -22,7 +23,8 @@ class ColonistError(Exception):
 
 
 def valid_username(username: str) -> bool:
-    return bool(USERNAME_RE.match(username.strip()))
+    username = username.strip()
+    return bool(USERNAME_RE.match(username)) and any(c.isalnum() for c in username)
 
 
 async def fetch_history(username: str, client: httpx.AsyncClient | None = None) -> dict:
@@ -34,18 +36,28 @@ async def fetch_history(username: str, client: httpx.AsyncClient | None = None) 
     client = client or httpx.AsyncClient(timeout=15, headers={"User-Agent": "catan-analyzer/0.1"})
     try:
         resp = await client.get(url)
+    except httpx.TimeoutException as exc:
+        raise ColonistError("Colonist.io took too long to respond. Try again in a minute.", 504) from exc
     except httpx.HTTPError as exc:
-        raise ColonistError(f"Couldn't reach Colonist.io: {exc.__class__.__name__}") from exc
+        raise ColonistError("Couldn't reach Colonist.io right now. Try again in a minute.") from exc
     finally:
         if owns:
             await client.aclose()
+    not_found = ColonistError(f"No Colonist.io player named '{username}'. Check the spelling, including any spaces or symbols.", 404)
     if resp.status_code in (400, 404):
-        raise ColonistError(f"No Colonist.io profile named '{username}'.", 404)
+        raise not_found
+    if resp.status_code == 429:
+        raise ColonistError("Colonist.io is limiting lookups right now. Wait a minute and try again.", 503)
     if resp.status_code != 200:
-        raise ColonistError(f"Colonist.io returned HTTP {resp.status_code}.")
-    data = resp.json()
+        raise ColonistError(f"Colonist.io is having problems (HTTP {resp.status_code}). Try again later.")
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise ColonistError("Colonist.io sent an unexpected response. Try again later.") from exc
+    if isinstance(data, dict) and "error" in data:
+        raise not_found
     if not isinstance(data, dict) or "gameDatas" not in data:
-        raise ColonistError(f"No Colonist.io profile named '{username}'.", 404)
+        raise ColonistError("Colonist.io sent an unexpected response. Try again later.")
     return data
 
 
@@ -156,7 +168,8 @@ def aggregate(games: list[dict]) -> dict:
         {
             "kind": "strength" if base["z"] >= 1.5 else "weakness" if base["z"] <= -1.5 else "info",
             "title": f"Overall: {round(base['win_rate'] * 100)}% wins vs {round(base['expected_rate'] * 100)}% expected by seat count",
-            "detail": f"{skill:.2f}x the win rate of an average player across {base['games']} games (z = {base['z']:+.1f}). "
+            "detail": f"{skill:.2f}x the win rate of an average player across {base['games']} game{'' if base['games'] == 1 else 's'} "
+            f"(z = {base['z']:+.1f}). "
             "Slices below are compared against your own level, not the seat baseline.",
             "evidence": base,
         }
@@ -262,8 +275,36 @@ def _insight(kind: str, dim: str, row: dict, delta: float) -> dict:
     }
 
 
+def _safe_normalize(raw: Any, username: str, user_id: str | None) -> dict | None:
+    if not isinstance(raw, dict) or not isinstance(raw.get("players"), list):
+        return None
+    if not all(isinstance(p, dict) for p in raw["players"]):
+        return None
+    try:
+        return normalize_game(raw, username, user_id)
+    except (TypeError, ValueError, AttributeError, KeyError):
+        return None
+
+
+def _display_name(username: str, raws: list, user_id: str | None) -> str:
+    for raw in raws:
+        players = raw.get("players") if isinstance(raw, dict) else None
+        for p in players if isinstance(players, list) else []:
+            if not isinstance(p, dict) or not isinstance(p.get("username"), str):
+                continue
+            if (user_id and str(p.get("userId")) == str(user_id)) or p["username"].lower() == username.lower():
+                return p["username"]
+    return username
+
+
 def build_profile(username: str, data: dict) -> dict:
     user_id = data.get("profileUserId")
-    games = [g for g in (normalize_game(r, username, user_id) for r in data.get("gameDatas") or []) if g]
+    raws = data.get("gameDatas") if isinstance(data.get("gameDatas"), list) else []
+    games = [g for g in (_safe_normalize(r, username, user_id) for r in raws) if g]
     games.sort(key=lambda g: -g["start_ms"])
-    return {"username": username, "source": "colonist", "games": games, "stats": aggregate(games)}
+    return {
+        "username": _display_name(username, raws, user_id),
+        "source": "colonist",
+        "games": games,
+        "stats": aggregate(games),
+    }
