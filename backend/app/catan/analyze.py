@@ -738,7 +738,11 @@ def _swings(a: Analyzer, focus: int, impact: dict, critical: list[dict], limit: 
         title = _describe(a, events[i], focus)
         if cause == "luck" and events[i]["t"] == "gain" and roll is not None:
             roller = "You" if roll["player"] == focus else a.names[roll["player"]]
-            title = f"{roller} rolled a {sum(roll['dice'])}: {title[0].lower()}{title[1:]}"
+            if _actor(events[i]) == roll["player"]:
+                rest = title.split(" ", 1)[1].removesuffix(" from the dice")
+                title = f"{roller} rolled a {sum(roll['dice'])} and {rest}"
+            else:
+                title = f"{roller} rolled a {sum(roll['dice'])}: {'you' + title[3:] if title.startswith('You ') else title}"
         prev_turn = turns[turns.index(turn) - 1] if turns.index(turn) else turn
         before, after = rows[prev_turn][f"wp_{focus}"], rows[turn][f"wp_{focus}"]
         out.append(
