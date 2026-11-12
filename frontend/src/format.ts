@@ -29,6 +29,7 @@ export const VERDICT_TONE: Record<string, 'good' | 'bad' | 'luck' | 'neutral'> =
   'Lucky win': 'luck',
   'Lost to RNG': 'luck',
   'Unlucky and outplayed': 'bad',
+  'Unlucky loss': 'luck',
   Outplayed: 'bad',
   'Strategic loss': 'bad',
   'Close call': 'neutral',

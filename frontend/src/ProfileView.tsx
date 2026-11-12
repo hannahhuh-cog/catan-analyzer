@@ -163,7 +163,7 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
 }
 
 function rngLosses(v: Record<string, number>) {
-  const losses = ['Lost to RNG', 'Unlucky and outplayed', 'Outplayed', 'Strategic loss', 'Close call'].reduce(
+  const losses = ['Lost to RNG', 'Unlucky and outplayed', 'Unlucky loss', 'Outplayed', 'Strategic loss', 'Close call'].reduce(
     (s, k) => s + (v[k] ?? 0),
     0,
   )

@@ -61,7 +61,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
     return items.sort((a, b) => a.m.turn - b.m.turn)
   }, [game])
   const highlights = useMemo(() => {
-    const scored = keyMoments.filter((k) => k.impact != null)
+    const scored = keyMoments.filter((k) => k.impact != null && Math.sign(k.impact) === k.m.polarity)
     const pick = (f: (k: KeyMoment) => boolean, dir: 1 | -1) =>
       scored.filter(f).sort((a, b) => dir * (b.impact! - a.impact!))[0]
     return [
@@ -71,6 +71,14 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
       { label: 'Best luck', k: pick((k) => k.m.kind === 'luck' && k.impact! > 0, 1) },
     ].filter((h) => h.k)
   }, [keyMoments])
+  const causePts = useMemo(() => {
+    const imp = game.impact
+    if (!imp) return null
+    const net = Math.round(imp.end * 100) - Math.round(imp.start * 100)
+    const decision = Math.round(imp.decision * 100)
+    const luck = Math.round(imp.luck * 100)
+    return { decision, luck, opponent: net - decision - luck } as Record<Cause, number>
+  }, [game])
   const wpAt = (turn: number) => {
     let v = game.timeline[0]?.[wpKey] ?? 0
     for (const r of game.timeline) {
@@ -107,7 +115,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
 
       <section className="panel">
         <h2>Win probability timeline</h2>
-        {game.impact && (
+        {game.impact && causePts && (
           <div className="glance">
             <div className="glance-net">
               Your win chance: <b>{pct(game.impact.start)}</b> after setup → <b>{pct(game.impact.end)}</b> at the end
@@ -115,9 +123,9 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
             <div className="glance-causes">
               {(['decision', 'luck', 'opponent'] as Cause[]).map((c) => (
                 <span key={c} className={`cause-chip cause-${c}`} title="Sum of every change in your win chance caused by this">
-                  <CauseIcon cause={c} polarity={game.impact[c] >= 0 ? 1 : -1} size={14} />
+                  <CauseIcon cause={c} polarity={causePts[c] >= 0 ? 1 : -1} size={14} />
                   {c === 'decision' ? 'Your decisions' : c === 'luck' ? 'Dice & robber' : "Opponents' moves"}{' '}
-                  <b className={game.impact[c] >= 0 ? 'pos' : 'neg'}>{pts(game.impact[c])}</b>
+                  <b className={causePts[c] >= 0 ? 'pos' : 'neg'}>{pts(causePts[c] / 100)}</b>
                 </span>
               ))}
             </div>
@@ -138,7 +146,16 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
           <span>green = helped you, red = hurt you, bigger = larger swing · click a marker for details</span>
         </div>
         <ResponsiveContainer width="100%" height={340}>
-          <LineChart data={timeline} margin={{ top: 16, right: 20, left: 0, bottom: 8 }}>
+          <LineChart
+            data={timeline}
+            margin={{ top: 16, right: 20, left: 0, bottom: 8 }}
+            onClick={(state) => {
+              const turn = Number(state?.activeLabel)
+              if (!Number.isFinite(turn) || keyMoments.length === 0) return
+              const nearest = keyMoments.reduce((a, b) => (Math.abs(b.m.turn - turn) < Math.abs(a.m.turn - turn) ? b : a))
+              if (Math.abs(nearest.m.turn - turn) <= 3) setSelected(nearest)
+            }}
+          >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="turn"
@@ -193,11 +210,17 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
                   y={wpAt(k.m.turn)}
                   r={size}
                   ifOverflow="extendDomain"
+                  zIndex={1000}
                   shape={(props: { cx?: number; cy?: number }) => (
                     <g
+                      className="moment-marker"
+                      role="button"
+                      aria-label={`Turn ${k.m.turn}: ${k.m.title}`}
                       transform={`translate(${props.cx ?? 0},${(props.cy ?? 0) + (stack ? (wpAt(k.m.turn) > 0.5 ? 1 : -1) * stack * 22 : 0)})`}
-                      onClick={() => setSelected(k)}
-                      style={{ cursor: 'pointer' }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelected(k)
+                      }}
                     >
                       <CauseShape cause={k.m.kind} polarity={k.m.polarity} size={size} selected={selected === k} />
                     </g>
@@ -327,6 +350,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
 
       <section className="panel">
         <h2>Players</h2>
+        <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -356,6 +380,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
             ))}
           </tbody>
         </table>
+        </div>
       </section>
     </div>
   )
