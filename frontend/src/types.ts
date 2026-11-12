@@ -61,6 +61,9 @@ export type Profile = {
       quits: number
       close_losses: number
       losses: number
+      margin_losses?: number
+      left?: number
+      bot_games_excluded?: number
       avg_rank: number
       fetched?: number
       unfinished?: number

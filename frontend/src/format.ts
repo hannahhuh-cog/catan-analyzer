@@ -35,6 +35,15 @@ export const VERDICT_TONE: Record<string, 'good' | 'bad' | 'luck' | 'neutral'> =
   'Close call': 'neutral',
 }
 
+export const LOSS_VERDICTS = [
+  'Lost to RNG',
+  'Unlucky loss',
+  'Unlucky and outplayed',
+  'Outplayed',
+  'Strategic loss',
+  'Close call',
+]
+
 export const RESOURCE_COLORS: Record<string, string> = {
   lumber: '#4d7c0f',
   brick: '#b45309',

@@ -15,14 +15,16 @@ import {
   YAxis,
   ZAxis,
 } from 'recharts'
-import { daysSince, monthYear, pct, signed, sinceText, STRATEGY_LABELS, timeAgo, VERDICT_TONE, zText } from './format'
+import { daysSince, LOSS_VERDICTS, monthYear, pct, signed, sinceText, STRATEGY_LABELS, timeAgo, VERDICT_TONE, zText } from './format'
 import type { Bucket, GameSummary, Insight, Profile } from './types'
 
 const DIMENSIONS: [string, string][] = [
   ['play_order', 'Win rate by placement order'],
   ['player_count', 'Win rate by player count'],
-  ['duration', 'Win rate by game length'],
+  ['length', 'Win rate by game length'],
   ['vp_target', 'Win rate by VP target'],
+  ['ranked', 'Win rate: ranked vs casual'],
+  ['dice', 'Win rate by dice type'],
 ]
 
 export default function ProfileView({ profile, onOpenGame }: { profile: Profile; onOpenGame: (id: string) => void }) {
@@ -46,7 +48,11 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
       {profile.source === 'colonist' && <DataNotes profile={profile} />}
 
       <div className="kpis">
-        <Kpi label="Games" value={String(o.games)} />
+        <Kpi
+          label="Games"
+          value={String(o.games)}
+          sub={o.bot_games_excluded ? `vs humans; ${o.bot_games_excluded} bot games left out` : undefined}
+        />
         <Kpi label="Win rate" value={pct(o.win_rate)} sub={`${pct(o.expected_rate)} expected by seat count`} />
         <Kpi
           label="Vs. average player"
@@ -55,7 +61,11 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
           title={`Wins relative to an average player in the same games (z = ${signed(o.z ?? 0)})`}
         />
         <Kpi label="Average finish" value={o.avg_rank.toFixed(2)} sub="1 = first place" />
-        <Kpi label="Close losses" value={`${o.close_losses}/${o.losses}`} sub="within 2 VP of the winner" />
+        <Kpi
+          label="Close losses"
+          value={`${o.close_losses}/${o.margin_losses ?? o.losses}`}
+          sub="within 2 VP of the winner (3 at 15 VP)"
+        />
         {deep && <Kpi label="Losses mostly RNG" value={rngLosses(deep.verdicts)} sub="out-decided the table, dice ran cold" />}
       </div>
 
@@ -115,7 +125,7 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
       <div className="grid-2">
         {DIMENSIONS.map(([key, title]) => {
           const rows = stats.breakdowns[key] ?? []
-          if (!rows.length) return null
+          if (rows.length < 2) return null
           const known = o.play_order_known
           const note =
             key === 'play_order' && known != null && known < o.games
@@ -175,7 +185,7 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
 }
 
 function rngLosses(v: Record<string, number>) {
-  const losses = ['Lost to RNG', 'Unlucky and outplayed', 'Unlucky loss', 'Outplayed', 'Strategic loss', 'Close call'].reduce(
+  const losses = LOSS_VERDICTS.reduce(
     (s, k) => s + (v[k] ?? 0),
     0,
   )
