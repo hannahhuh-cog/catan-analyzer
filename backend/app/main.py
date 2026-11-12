@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from .demo import demo_game, demo_profile
 
 app = FastAPI(title="Catan Analyzer")
 _cache: dict[str, tuple[float, dict]] = {}
+_inflight: dict[str, asyncio.Task] = {}
 CACHE_TTL = 300
 
 
@@ -42,15 +44,26 @@ async def profile(username: str) -> dict:
     hit = _cache.get(key)
     if hit and time.time() - hit[0] < CACHE_TTL:
         return hit[1]
+    # Repeated quick searches for the same name share one Colonist.io request.
+    task = _inflight.get(key)
+    if task is None:
+        task = asyncio.ensure_future(fetch_history(username))
+        _inflight[key] = task
+        task.add_done_callback(lambda _: _inflight.pop(key, None))
     try:
-        data = await fetch_history(username)
+        data = await asyncio.shield(task)
     except ColonistError as exc:
         raise HTTPException(exc.status, str(exc)) from exc
     result = build_profile(username, data)
     if not result["games"]:
-        raise HTTPException(404, f"'{username}' has no recorded games on Colonist.io.")
+        raise HTTPException(404, f"{result['username']} has a Colonist.io profile but no games in its public history yet.")
     _cache[key] = (time.time(), result)
     return result
+
+
+@app.get("/api/{path:path}", include_in_schema=False)
+def api_not_found(path: str) -> None:
+    raise HTTPException(404, "Not found. Search for a Colonist.io username from the top bar.")
 
 
 DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"

@@ -27,6 +27,10 @@ const DIMENSIONS: [string, string][] = [
   ['dice', 'Win rate by dice type'],
 ]
 
+const MIN_SAMPLE = 8
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
 export default function ProfileView({ profile, onOpenGame }: { profile: Profile; onOpenGame: (id: string) => void }) {
   const { stats, games } = profile
   const o = stats.overall
@@ -42,6 +46,12 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
               ? 'Demo profile: 40 simulated games with full replays, analyzed end to end.'
               : coverageText(o)}
           </p>
+          {profile.source === 'colonist' && o.games < MIN_SAMPLE && (
+            <p className="notice small">
+              Only {plural(o.games, 'game')} to go on, so these numbers are mostly noise. Patterns by seat, player count
+              and game length show up after {MIN_SAMPLE}+ games in a slice.
+            </p>
+          )}
         </div>
       </div>
 

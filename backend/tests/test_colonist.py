@@ -43,6 +43,8 @@ def test_username_validation():
     assert not valid_username("")
     assert not valid_username("a/../b")
     assert not valid_username("x" * 41)
+    assert not valid_username("..")
+    assert not valid_username(" . ")
 
 
 def test_build_profile_and_play_order_insight():
@@ -68,6 +70,8 @@ async def test_fetch_history_errors():
     def handler(request: httpx.Request) -> httpx.Response:
         if "missing" in request.url.path:
             return httpx.Response(404)
+        if "errbody" in request.url.path:
+            return httpx.Response(200, json={"error": {"httpStatusCode": 400}})
         return httpx.Response(200, json={"profileUserId": "1", "gameDatas": []})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -76,8 +80,51 @@ async def test_fetch_history_errors():
             await fetch_history("missing", client)
         assert e.value.status == 404
         with pytest.raises(ColonistError) as e:
+            await fetch_history("errbody", client)
+        assert e.value.status == 404
+        with pytest.raises(ColonistError) as e:
             await fetch_history("bad/name", client)
         assert e.value.status == 400
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "response, status, text",
+    [
+        (httpx.Response(429), 503, "limiting"),
+        (httpx.Response(500, text="oops"), 502, "HTTP 500"),
+        (httpx.Response(200, text="<html>challenge</html>"), 502, "unexpected response"),
+        (httpx.Response(200, json=["not", "a", "profile"]), 502, "unexpected response"),
+    ],
+)
+async def test_fetch_history_upstream_failures(response, status, text):
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: response)) as client:
+        with pytest.raises(ColonistError) as e:
+            await fetch_history("someone", client)
+    assert e.value.status == status and text in str(e.value)
+
+
+@pytest.mark.anyio
+async def test_fetch_history_timeout():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ColonistError) as e:
+            await fetch_history("someone", client)
+    assert e.value.status == 504 and "too long" in str(e.value)
+
+
+def test_build_profile_skips_malformed_games_and_uses_profile_name():
+    raw = [_game(i, 1, 1) for i in range(3)] + [None, "x", {"id": "9"}, {"id": "10", "players": ["x"]}]
+    p = build_profile("ME", {"profileUserId": "1", "gameDatas": raw})
+    assert len(p["games"]) == 3 and p["username"] == "Me"
+
+
+def test_build_profile_single_game():
+    p = build_profile("me", {"profileUserId": "1", "gameDatas": [_game(0, 3, 2)]})
+    o = p["stats"]["overall"]
+    assert o["games"] == 1 and o["wins"] == 0 and len(p["stats"]["trend"]) == 1
 
 
 @pytest.fixture
