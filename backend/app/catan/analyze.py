@@ -433,7 +433,7 @@ def analyze_game(game: dict, focus: int) -> dict:
     scores = {c: _decision(a, c) for c in a.colors}
     components, decision_score = scores[focus]
     opp_decision = sum(scores[p.color][1] for p in opps) / len(opps)
-    decision_edge = decision_score - opp_decision
+    decision_edge = round(decision_score - opp_decision)
     opp_setup = sum(scores[p.color][0]["opening"] for p in opps) / len(opps)
 
     verdict, verdict_detail = _verdict(won, luck_index, decision_edge)
