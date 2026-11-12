@@ -80,7 +80,16 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
           moments: ▲ green = good decision, ▼ red = error, ◆ = luck (dice or robber). Click one for details.
         </p>
         <ResponsiveContainer width="100%" height={340}>
-          <LineChart data={timeline} margin={{ top: 16, right: 20, left: 0, bottom: 8 }}>
+          <LineChart
+            data={timeline}
+            margin={{ top: 16, right: 20, left: 0, bottom: 8 }}
+            onClick={(state) => {
+              const turn = Number(state?.activeLabel)
+              if (!Number.isFinite(turn) || game.critical.length === 0) return
+              const nearest = game.critical.reduce((a, b) => (Math.abs(b.turn - turn) < Math.abs(a.turn - turn) ? b : a))
+              if (Math.abs(nearest.turn - turn) <= 3) setSelected(nearest)
+            }}
+          >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="turn" type="number" domain={[0, 'dataMax']} label={{ value: 'Turn', position: 'insideBottomRight', offset: -4 }} />
             <YAxis domain={[0, 1]} tickFormatter={(v) => pct(v)} />
@@ -98,20 +107,32 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
                 isAnimationActive={false}
               />
             ))}
-            {game.critical.map((m, i) => (
-              <ReferenceDot
-                key={i}
-                x={m.turn}
-                y={wpAt(m.turn)}
-                r={8}
-                fill={m.kind === 'luck' ? '#a855f7' : m.polarity > 0 ? '#16a34a' : '#dc2626'}
-                stroke="#fff"
-                strokeWidth={2}
-                onClick={() => setSelected(m)}
-                style={{ cursor: 'pointer' }}
-                label={{ value: m.kind === 'luck' ? '◆' : m.polarity > 0 ? '▲' : '▼', fill: '#fff', fontSize: 9 }}
-              />
-            ))}
+            {game.critical.map((m, i) => {
+              const color = m.kind === 'luck' ? '#a855f7' : m.polarity > 0 ? '#16a34a' : '#dc2626'
+              const glyph = m.kind === 'luck' ? '◆' : m.polarity > 0 ? '▲' : '▼'
+              return (
+                <ReferenceDot
+                  key={i}
+                  x={m.turn}
+                  y={wpAt(m.turn)}
+                  r={8}
+                  zIndex={1000}
+                  shape={(props: { cx?: number; cy?: number }) => (
+                    <g
+                      className="moment-marker"
+                      role="button"
+                      aria-label={`Turn ${m.turn}: ${m.title}`}
+                      onClick={() => setSelected(m)}
+                    >
+                      <circle cx={props.cx} cy={props.cy} r={selected === m ? 10 : 8} fill={color} stroke="#fff" strokeWidth={2} />
+                      <text x={props.cx} y={(props.cy ?? 0) + 3} textAnchor="middle" fontSize={9} fill="#fff">
+                        {glyph}
+                      </text>
+                    </g>
+                  )}
+                />
+              )
+            })}
           </LineChart>
         </ResponsiveContainer>
       </section>
@@ -217,6 +238,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
 
       <section className="panel">
         <h2>Players</h2>
+        <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -246,6 +268,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
             ))}
           </tbody>
         </table>
+        </div>
       </section>
     </div>
   )

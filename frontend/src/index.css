@@ -124,3 +124,5 @@ button.link:hover { background: none; text-decoration: underline; }
 .meter-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
 .meter-track { height: 8px; background: #eef2f7; border-radius: 4px; overflow: hidden; }
 .meter-fill { height: 100%; background: var(--accent); }
+.moment-marker { cursor: pointer; pointer-events: all; }
+.moment-marker text { pointer-events: none; }
