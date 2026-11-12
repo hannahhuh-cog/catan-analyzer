@@ -84,9 +84,9 @@ button.link:hover { background: none; text-decoration: underline; }
 .insight-title { font-weight: 600; margin: 4px 0 2px; }
 .insight-detail { color: var(--muted); font-size: 12.5px; }
 .tag { display: inline-block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 6px; border-radius: 4px; background: #f1f5f9; color: #475569; margin-right: 6px; }
-.insight.strength .tag, .moment.decision.up .tag { background: #dcfce7; color: #166534; }
-.insight.weakness .tag, .moment.decision.down .tag { background: #fee2e2; color: #991b1b; }
-.insight.luck .tag, .moment.luck .tag { background: #ede9fe; color: #5b21b6; }
+.insight.strength .tag { background: #dcfce7; color: #166534; }
+.insight.weakness .tag { background: #fee2e2; color: #991b1b; }
+.insight.luck .tag { background: #ede9fe; color: #5b21b6; }
 .table-wrap { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; }
 .table th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); padding: 8px; white-space: nowrap; }
@@ -115,10 +115,27 @@ button.link:hover { background: none; text-decoration: underline; }
 .moments { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .moment { display: flex; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid var(--border); border-left-width: 4px; border-radius: 6px; cursor: pointer; background: var(--surface); color: var(--text); }
 button.moment:hover:not(:disabled) { background: #f8fafc; }
-.moment-body, .moment-title, .moment-detail { display: block; }
-.moment.decision.up { border-left-color: var(--good); }
-.moment.decision.down { border-left-color: var(--bad); }
-.moment.luck { border-left-color: var(--luck); }
+.moment-title, .moment-detail { display: block; }
+.moment.up { border-left-color: var(--good); }
+.moment.down { border-left-color: var(--bad); }
+.moment-body { display: block; flex: 1; min-width: 0; }
+.moment.cause-decision.up .tag { background: #dcfce7; color: #166534; }
+.moment.cause-decision.down .tag { background: #fee2e2; color: #991b1b; }
+.moment.cause-luck .tag { background: #ede9fe; color: #5b21b6; }
+.moment.cause-opponent .tag { background: #f1f5f9; color: #334155; }
+.impact { align-self: flex-start; font-weight: 700; font-size: 12.5px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.impact.pos { background: #dcfce7; }
+.impact.neg { background: #fee2e2; }
+.impact.mixed { background: #f1f5f9; color: var(--muted); font-weight: 600; }
+.glance { display: grid; gap: 8px; margin-bottom: 10px; }
+.glance-causes, .glance-highlights { display: flex; flex-wrap: wrap; gap: 8px; }
+.cause-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; }
+.highlight { font: inherit; font-size: 12.5px; text-align: left; color: var(--text); background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+.highlight:hover:not(:disabled) { background: #eff6ff; border-color: #bfdbfe; }
+.marker-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin-bottom: 4px; }
+.chart-tip { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 2px 8px rgba(0,0,0,.08); max-width: 320px; }
+.chart-tip-title { font-weight: 700; margin-bottom: 2px; }
+.chart-tip-moment { margin-top: 4px; border-top: 1px dashed #eef0f2; padding-top: 4px; color: #111827; }
 button.moment.selected { background: #eff6ff; box-shadow: 0 0 0 2px #93c5fd; }
 .moment-turn { font-weight: 700; color: var(--muted); min-width: 38px; }
 .moment-title { font-weight: 600; }
