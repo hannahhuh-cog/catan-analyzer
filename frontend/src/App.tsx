@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { fetchDemo, fetchDemoGame, fetchProfile } from './api'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ApiError, fetchDemo, fetchDemoGame, fetchProfile, usernameProblem } from './api'
 import GameView from './GameView'
 import ProfileView from './ProfileView'
 import type { GameAnalysis, Profile } from './types'
@@ -24,6 +24,9 @@ export default function App() {
   const [game, setGame] = useState<GameAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [retryable, setRetryable] = useState(false)
+  const [slow, setSlow] = useState(false)
+  const inflight = useRef<AbortController | null>(null)
   const [query, setQuery] = useState(route.kind === 'profile' ? route.user : '')
 
   useEffect(() => {
@@ -33,25 +36,56 @@ export default function App() {
   }, [])
 
   const load = useCallback(async (r: Route) => {
+    // A newer search always wins: abort the previous request so its late response can't replace this one.
+    inflight.current?.abort()
+    const ctrl = new AbortController()
+    inflight.current = ctrl
+    const { signal } = ctrl
     setError(null)
-    if (r.kind === 'home') return
+    setSlow(false)
+    if (r.kind === 'home') {
+      setLoading(false)
+      return
+    }
+    if (r.kind === 'profile') {
+      setProfile(null)
+      const problem = usernameProblem(r.user)
+      if (problem) {
+        setLoading(false)
+        setRetryable(false)
+        setError(problem)
+        return
+      }
+    }
     setLoading(true)
+    const slowTimer = setTimeout(() => setSlow(true), 5000)
     try {
       if (r.kind === 'profile') {
-        setProfile(null)
-        setProfile(await fetchProfile(r.user))
+        const p = await fetchProfile(r.user, signal)
+        if (!signal.aborted) setProfile(p)
       } else if (r.kind === 'demo') {
-        if (profile?.source !== 'demo') setProfile(await fetchDemo())
+        if (profile?.source !== 'demo') {
+          const p = await fetchDemo(signal)
+          if (!signal.aborted) setProfile(p)
+        }
       } else {
         setGame(null)
-        const [g, p] = await Promise.all([fetchDemoGame(r.id), profile?.source === 'demo' ? profile : fetchDemo()])
-        setGame(g)
-        setProfile(p)
+        const [g, p] = await Promise.all([
+          fetchDemoGame(r.id, signal),
+          profile?.source === 'demo' ? profile : fetchDemo(signal),
+        ])
+        if (!signal.aborted) {
+          setGame(g)
+          setProfile(p)
+        }
       }
     } catch (e) {
+      if (signal.aborted) return
+      setRetryable(e instanceof ApiError ? e.retryable : true)
       setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      clearTimeout(slowTimer)
+      if (!signal.aborted) setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -65,7 +99,9 @@ export default function App() {
     e.preventDefault()
     const u = query.trim()
     if (!u) return
-    go(`/u/${encodeURIComponent(u)}`)
+    // Searching the name already on screen (e.g. after an error) retries instead of doing nothing.
+    if (route.kind === 'profile' && route.user === u) load(route)
+    else go(`/u/${encodeURIComponent(u)}`)
   }
 
   return (
@@ -75,33 +111,47 @@ export default function App() {
           <img className="brand-mark" src="/favicon.svg" alt="" width={24} height={24} />
           Catan Analyzer
         </a>
-        <form className="search" onSubmit={submit}>
-          <input
-            type="search"
-            enterKeyHint="search"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            aria-label="Colonist.io username"
-            placeholder="Colonist.io username"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            maxLength={40}
-          />
-          <button type="submit" disabled={!query.trim()}>
-            Analyze
-          </button>
-          <button type="button" className="secondary" onClick={() => go('/demo')}>
-            Demo
-          </button>
-        </form>
+        {route.kind !== 'home' && (
+          <form className="search" onSubmit={submit}>
+            <input
+              type="search"
+              enterKeyHint="search"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-label="Colonist.io username"
+              placeholder="Colonist.io username"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              maxLength={40}
+            />
+            <button type="submit" disabled={!query.trim()}>
+              Analyze
+            </button>
+            <button type="button" className="secondary" onClick={() => go('/demo')}>
+              Demo
+            </button>
+          </form>
+        )}
       </header>
       <main className="content">
-        {route.kind === 'home' && <Home onDemo={() => go('/demo')} />}
-        {loading && <div className="state" role="status">Loading{route.kind === 'profile' ? ` ${route.user}'s games from Colonist.io` : ''}...</div>}
+        {route.kind === 'home' && (
+          <Home query={query} setQuery={setQuery} onSubmit={submit} onDemo={() => go('/demo')} />
+        )}
+        {loading && (
+          <div className="state" role="status">
+            Loading{route.kind === 'profile' ? ` ${route.user}'s games from Colonist.io` : ''}...
+            {slow && <div className="small">Colonist.io is slow to respond. Still trying (up to 15 seconds).</div>}
+          </div>
+        )}
         {error && !loading && (
           <div className="state error" role="alert">
-            {error}
+            <div>{error}</div>
+            {retryable && (
+              <button type="button" className="secondary retry" onClick={() => load(route)}>
+                Try again
+              </button>
+            )}
           </div>
         )}
         {!loading && !error && (route.kind === 'profile' || route.kind === 'demo') && profile && (
@@ -122,14 +172,42 @@ export default function App() {
   )
 }
 
-function Home({ onDemo }: { onDemo: () => void }) {
+type HomeProps = {
+  query: string
+  setQuery: (q: string) => void
+  onSubmit: (e: React.FormEvent) => void
+  onDemo: () => void
+}
+
+function Home({ query, setQuery, onSubmit, onDemo }: HomeProps) {
   return (
     <section className="home">
       <h1>Did you lose to the dice, or to your decisions?</h1>
       <p className="lede">
-        Enter a Colonist.io username to analyze their recent games: win rate by placement order, player count and game
-        length, compared against what seat luck alone would predict. Open the demo to see the full per-game analysis:
-        luck vs. decision scores, a win-probability timeline with critical moments, and strategy strengths.
+        Enter your Colonist.io username to see how often you win, where you win and lose, and how that compares to what
+        seat count alone would predict.
+      </p>
+      <form className="hero-search" onSubmit={onSubmit}>
+        <input
+          type="search"
+          enterKeyHint="search"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          aria-label="Colonist.io username"
+          placeholder="Your Colonist.io username"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          maxLength={40}
+          autoFocus
+        />
+        <button type="submit" className="primary-lg" disabled={!query.trim()}>
+          Analyze my games
+        </button>
+      </form>
+      <p className="muted small hero-hint">
+        The name shown on your Colonist.io profile, including any #1234 tag. Capitalization doesn't matter. Uses
+        Colonist's public game history: no login needed.
       </p>
       <div className="home-cards">
         <div className="card">
@@ -137,17 +215,24 @@ function Home({ onDemo }: { onDemo: () => void }) {
           <p>Up to 100 recent games from Colonist.io's public history: no login needed.</p>
         </div>
         <div className="card">
-          <h2>Luck vs. strategy</h2>
+          <h2>
+            Luck vs. strategy <span className="demo-tag">Demo</span>
+          </h2>
           <p>Actual dice income vs. what your buildings should produce, robber damage, and decision quality.</p>
         </div>
         <div className="card">
-          <h2>Game timeline</h2>
+          <h2>
+            Game timeline <span className="demo-tag">Demo</span>
+          </h2>
           <p>Win probability turn by turn, with your critical errors and best decisions marked.</p>
         </div>
       </div>
-      <button className="primary-lg" onClick={onDemo}>
-        Open the demo profile
-      </button>
+      <p className="muted">
+        Per-game luck and decision analysis needs full replays, which Colonist only shares with logged-in players.{' '}
+        <button type="button" className="link inline" onClick={onDemo}>
+          See it on the demo profile
+        </button>
+      </p>
     </section>
   )
 }

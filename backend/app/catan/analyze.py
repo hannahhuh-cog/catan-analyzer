@@ -433,7 +433,7 @@ def analyze_game(game: dict, focus: int) -> dict:
     scores = {c: _decision(a, c) for c in a.colors}
     components, decision_score = scores[focus]
     opp_decision = sum(scores[p.color][1] for p in opps) / len(opps)
-    decision_edge = decision_score - opp_decision
+    decision_edge = round(decision_score - opp_decision)
     opp_setup = sum(scores[p.color][0]["opening"] for p in opps) / len(opps)
 
     verdict, verdict_detail = _verdict(won, luck_index, decision_edge)
@@ -581,7 +581,9 @@ def _decision(a: Analyzer, color: int) -> tuple[dict, int]:
         "hand_management": round(1 - min(1.0, ps.discarded / 10), 3),
         "awards": round(min(1.0, len(ps.awards) / 2), 3),
     }
-    weights = {"opening": 0.35, "tempo": 0.35, "robber": 0.1, "hand_management": 0.1, "awards": 0.1}
+    # Tempo (being ahead on VP) is shown but not scored: it is an outcome that good dice produce too,
+    # so scoring it would count luck as good decisions.
+    weights = {"opening": 0.45, "robber": 0.2, "hand_management": 0.15, "awards": 0.2}
     tot = sum(w for k, w in weights.items() if components[k] is not None)
     score = round(100 * sum(components[k] * w for k, w in weights.items() if components[k] is not None) / tot)
     return components, score
@@ -602,7 +604,7 @@ def _verdict(won: bool, luck: float, edge: float) -> tuple[str, str]:
     if luck <= -0.5 and edge < 0:
         return "Unlucky and outplayed", "Bad dice made it harder, but opponents also made better decisions."
     if luck <= -0.5:
-        return "Unlucky loss", "Dice ran a bit cold and your decisions were on par with the table."
+        return "Unlucky loss", "Dice ran a bit cold; your decisions matched or beat the table."
     if edge < 0 and luck >= 0.5:
         return "Outplayed", "The dice were on your side; the gap came from decisions."
     if edge < 0:
