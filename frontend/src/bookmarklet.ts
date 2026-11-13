@@ -65,40 +65,38 @@ function bookmarklet(importUrl: string, msg: typeof MSG) {
     a.click()
     alert(`${why} The replay was saved as colonist-replay.json: upload it on ${importUrl}`)
   }
+  // The tab may still be loading (or on its sign-in page), so re-post until it acknowledges.
+  const deliver = (payload: object, onFail: () => void) => {
+    if (!tab || tab.closed) return onFail()
+    let done = false
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin === target && e.data && e.data.type === msg.ack) {
+        done = true
+        window.removeEventListener('message', onMsg)
+      }
+    }
+    window.addEventListener('message', onMsg)
+    const started = Date.now()
+    const send = () => {
+      if (done) return
+      if (tab.closed || Date.now() - started > 120000) {
+        window.removeEventListener('message', onMsg)
+        return onFail()
+      }
+      try {
+        tab.postMessage(payload, target)
+      } catch {
+        /* not loaded yet: keep trying */
+      }
+      setTimeout(send, 700)
+    }
+    send()
+  }
   fetchReplay().then(
-    (replay) => {
-      if (!tab || tab.closed) return save(replay, "Couldn't open the analyzer tab (pop-up blocked?).")
-      let done = false
-      const onMsg = (e: MessageEvent) => {
-        if (e.origin === target && e.data && e.data.type === msg.ack) {
-          done = true
-          window.removeEventListener('message', onMsg)
-        }
-      }
-      window.addEventListener('message', onMsg)
-      const started = Date.now()
-      const send = () => {
-        if (done) return
-        if (tab.closed || Date.now() - started > 120000) {
-          window.removeEventListener('message', onMsg)
-          return save(replay, "Couldn't reach the analyzer tab.")
-        }
-        try {
-          tab.postMessage({ type: msg.replay, replay }, target)
-        } catch {
-          /* the tab is still on its sign-in page: keep trying */
-        }
-        setTimeout(send, 700)
-      }
-      send()
-    },
+    (replay) => deliver({ type: msg.replay, replay }, () => save(replay, "Couldn't reach the analyzer tab (pop-up blocked?).")),
     (e: unknown) => {
       const message = e instanceof Error ? e.message : String(e)
-      try {
-        tab?.postMessage({ type: msg.error, message }, target)
-      } catch {
-        /* ignore */
-      }
+      deliver({ type: msg.error, message }, () => {})
       alert(`Catan Analyzer: ${message}`)
     },
   )

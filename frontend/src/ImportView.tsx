@@ -41,8 +41,10 @@ export default function ImportView() {
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (!isColonistOrigin(e.origin) || !e.data || typeof e.data !== 'object') return
-      if (e.data.type === MSG.replay) {
+      if (e.data.type === MSG.replay || e.data.type === MSG.error) {
         ;(e.source as Window | null)?.postMessage({ type: MSG.ack }, e.origin)
+      }
+      if (e.data.type === MSG.replay) {
         if (replayRef.current == null) analyze(e.data.replay, null)
       } else if (e.data.type === MSG.error) {
         setError(String(e.data.message))
