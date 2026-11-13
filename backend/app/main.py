@@ -3,13 +3,16 @@ from __future__ import annotations
 import asyncio
 import time
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .catan.analyze import analyze_game
+from .catan.colonist_replay import ReplayError, replay_to_game
 from .colonist import ColonistError, build_profile, fetch_history, valid_username
-from .demo import demo_game, demo_profile
+from .demo import _game_summary, demo_game, demo_profile
 
 app = FastAPI(title="Catan Analyzer")
 _cache: dict[str, tuple[float, dict]] = {}
@@ -25,6 +28,21 @@ def health() -> dict:
 @app.get("/api/demo")
 def demo() -> dict:
     return demo_profile()
+
+
+@app.post("/api/replay/analyze")
+def analyze_replay(replay: Annotated[dict, Body()], focus: int | None = None) -> dict:
+    try:
+        game = replay_to_game(replay)
+    except ReplayError as e:
+        raise HTTPException(422, str(e)) from e
+    if focus is not None and focus not in game["play_order"]:
+        raise HTTPException(422, "That player isn't in this game.")
+    analysis = analyze_game(game, game["focus"] if focus is None else focus)
+    gid = f"colonist-{game['id']}" if game["id"] else "colonist-replay"
+    start = game["start_time"] if isinstance(game["start_time"], int) else int(time.time() * 1000)
+    summary = _game_summary(gid, game, analysis, start)
+    return {"id": gid, "summary": summary, "color_names": game["color_names"], **analysis}
 
 
 @app.get("/api/demo/games/{game_id}")

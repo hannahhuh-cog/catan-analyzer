@@ -2,14 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, fetchDemo, fetchDemoGame, fetchProfile, usernameProblem } from './api'
 import GameView from './GameView'
 import IslandArt, { FeatureIcon } from './GameArt'
+import ImportView from './ImportView'
 import ProfileView from './ProfileView'
 import type { GameAnalysis, Profile } from './types'
 
-type Route = { kind: 'home' } | { kind: 'profile'; user: string } | { kind: 'demo' } | { kind: 'game'; id: string }
+type Route =
+  | { kind: 'home' }
+  | { kind: 'import' }
+  | { kind: 'profile'; user: string } | { kind: 'demo' } | { kind: 'game'; id: string }
 
 function parseHash(): Route {
   const h = decodeURIComponent(window.location.hash.replace(/^#\/?/, ''))
   if (h === 'demo') return { kind: 'demo' }
+  if (h === 'import') return { kind: 'import' }
   if (h.startsWith('demo/')) return { kind: 'game', id: h.slice(5) }
   if (h.startsWith('u/')) return { kind: 'profile', user: h.slice(2) }
   return { kind: 'home' }
@@ -44,7 +49,7 @@ export default function App() {
     const { signal } = ctrl
     setError(null)
     setSlow(false)
-    if (r.kind === 'home') {
+    if (r.kind === 'home' || r.kind === 'import') {
       setLoading(false)
       return
     }
@@ -138,8 +143,15 @@ export default function App() {
       </header>
       <main className="content">
         {route.kind === 'home' && (
-          <Home query={query} setQuery={setQuery} onSubmit={submit} onDemo={() => go('/demo')} />
+          <Home
+            query={query}
+            setQuery={setQuery}
+            onSubmit={submit}
+            onDemo={() => go('/demo')}
+            onImport={() => go('/import')}
+          />
         )}
+        {route.kind === 'import' && <ImportView />}
         {loading && (
           <div className="state" role="status">
             <span className="loading-die" aria-hidden="true">⚄</span>
@@ -180,9 +192,10 @@ type HomeProps = {
   setQuery: (q: string) => void
   onSubmit: (e: React.FormEvent) => void
   onDemo: () => void
+  onImport: () => void
 }
 
-function Home({ query, setQuery, onSubmit, onDemo }: HomeProps) {
+function Home({ query, setQuery, onSubmit, onDemo, onImport }: HomeProps) {
   return (
     <section className="home">
       <div className="hero-layout">
@@ -232,7 +245,7 @@ function Home({ query, setQuery, onSubmit, onDemo }: HomeProps) {
           <div className="feature-icon"><FeatureIcon kind="dice" /></div>
           <span className="feature-step">02 / THE DICE CHECK</span>
           <h2>
-            Luck vs. strategy <span className="demo-tag">Demo</span>
+            Luck vs. strategy
           </h2>
           <p>Actual dice income vs. what your buildings should produce, robber damage, and decision quality.</p>
         </div>
@@ -240,16 +253,21 @@ function Home({ query, setQuery, onSubmit, onDemo }: HomeProps) {
           <div className="feature-icon"><FeatureIcon kind="timeline" /></div>
           <span className="feature-step">03 / THE TURNING POINTS</span>
           <h2>
-            Game timeline <span className="demo-tag">Demo</span>
+            Game timeline
           </h2>
           <p>Win probability turn by turn, with your critical errors and best decisions marked.</p>
         </div>
       </div>
       <p className="muted demo-explainer">
-        Per-game luck and decision analysis needs full replays, which Colonist only shares with logged-in players.{' '}
+        Per-game luck and decision analysis needs the full replay, which Colonist only shares with logged-in players.{' '}
+        <button type="button" className="link inline" onClick={onImport}>
+          Import one of your games
+        </button>{' '}
+        with a one-click bookmark, or{' '}
         <button type="button" className="link inline" onClick={onDemo}>
-          See it on the demo profile
+          see it on the demo profile
         </button>
+        .
       </p>
     </section>
   )
