@@ -40,6 +40,7 @@ export default function ProfileView({ profile, onOpenGame }: { profile: Profile;
     <div className="profile">
       <div className="page-head">
         <div>
+          <div className="eyebrow">Your seat at the strategy table</div>
           <h1>{profile.username}</h1>
           <p className="muted">
             {profile.source === 'demo'

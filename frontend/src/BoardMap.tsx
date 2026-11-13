@@ -1,5 +1,6 @@
 import { PLAYER_COLORS, RESOURCE_COLORS } from './format'
 import type { BoardData, GameAnalysis } from './types'
+import { ResourceGlyph } from './GameArt'
 
 const R = 1
 
@@ -33,9 +34,10 @@ export default function BoardMap({
           <polygon
             points={hexPoints(t.center)}
             fill={RESOURCE_COLORS[t.resource] ?? '#cbd5e1'}
-            stroke={highlight === t.id ? '#111827' : '#f8fafc'}
+            stroke={highlight === t.id ? '#213e46' : '#fff3d8'}
             strokeWidth={highlight === t.id ? 0.12 : 0.06}
           />
+          <g transform={`translate(${t.center[0]} ${t.center[1] - 0.43}) scale(0.011)`}><ResourceGlyph resource={t.resource} /></g>
           {t.number && (
             <>
               <circle cx={t.center[0]} cy={t.center[1]} r={0.32} fill="#fffbeb" />
