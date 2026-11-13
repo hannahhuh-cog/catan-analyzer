@@ -329,9 +329,7 @@ class Analyzer:
                 recent["_by"].append(p.color)
                 by = ", ".join(dict.fromkeys(self.names[x] for x in recent["_by"]))
                 span = f"on turn {self.turn}" if recent["turn"] == self.turn else f"from turn {recent['turn']} to {self.turn}"
-                recent["detail"] = (
-                    f"Blocked {recent['count']} times {span} (~{loss} pips each time), by {by}."
-                )
+                recent["detail"] = f"Blocked {recent['count']} times {span} (~{loss} pips each time), by {by}."
             elif loss >= 5:
                 self.moment(
                     "luck",

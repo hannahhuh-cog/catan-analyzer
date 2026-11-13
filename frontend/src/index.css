@@ -269,3 +269,9 @@ button.link.inline { margin: 0; font-size: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+.import h1 { margin: 8px 0 20px; letter-spacing: -.03em; }
+.import .state { margin-bottom: 20px; }
+.import-steps .card p { margin-bottom: 10px; }
+.bookmarklet { display: inline-block; padding: 6px 12px; border-radius: 999px; background: #f3c464; border: 1px solid #ac7935; color: #493c25; font-weight: 700; text-decoration: none; cursor: grab; }
+.upload input { font: inherit; max-width: 100%; }
+.import-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }

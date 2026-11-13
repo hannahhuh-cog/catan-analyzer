@@ -20,10 +20,10 @@ export class ApiError extends Error {
   }
 }
 
-async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
+async function get<T>(url: string, signal?: AbortSignal, init?: RequestInit): Promise<T> {
   let res: Response
   try {
-    res = await fetch(url, { signal })
+    res = await fetch(url, { ...init, signal })
   } catch (e) {
     if (signal?.aborted) throw e
     throw new ApiError("Couldn't reach the Catan Analyzer server. Check your connection and try again.", true)
@@ -49,3 +49,9 @@ export const fetchProfile = (username: string, signal?: AbortSignal) =>
 export const fetchDemo = (signal?: AbortSignal) => get<Profile>('/api/demo', signal)
 export const fetchDemoGame = (id: string, signal?: AbortSignal) =>
   get<GameAnalysis>(`/api/demo/games/${encodeURIComponent(id)}`, signal)
+export const analyzeReplay = (replay: unknown, focus: number | null, signal?: AbortSignal) =>
+  get<GameAnalysis>(`/api/replay/analyze${focus == null ? '' : `?focus=${focus}`}`, signal, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(replay),
+  })

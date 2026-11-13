@@ -31,7 +31,15 @@ const GOOD = '#16a34a'
 const BAD = '#dc2626'
 const pts = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(Math.round(x * 100))} pts`
 
-export default function GameView({ game, onBack }: { game: GameAnalysis; onBack: () => void }) {
+export default function GameView({
+  game,
+  onBack,
+  backLabel = '← Back to profile',
+}: {
+  game: GameAnalysis
+  onBack: () => void
+  backLabel?: string
+}) {
   const [selected, setSelected] = useState<KeyMoment | null>(null)
   const me = game.players.find((p) => p.color === game.focus)!
   const others = game.players.filter((p) => p.color !== game.focus)
@@ -114,7 +122,7 @@ export default function GameView({ game, onBack }: { game: GameAnalysis; onBack:
   return (
     <div className="game">
       <button className="link" onClick={onBack}>
-        ← Back to profile
+        {backLabel}
       </button>
       <div className={`verdict-banner tone-${tone}`}>
         <div>
