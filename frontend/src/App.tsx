@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, fetchDemo, fetchDemoGame, fetchProfile, usernameProblem } from './api'
 import GameView from './GameView'
+import IslandArt, { FeatureIcon } from './GameArt'
 import ProfileView from './ProfileView'
 import type { GameAnalysis, Profile } from './types'
 
@@ -111,6 +112,7 @@ export default function App() {
           <img className="brand-mark" src="/favicon.svg" alt="" width={24} height={24} />
           Catan Analyzer
         </a>
+        {route.kind === 'home' && <span className="topbar-note">Roll. Reflect. Level up.</span>}
         {route.kind !== 'home' && (
           <form className="search" onSubmit={submit}>
             <input
@@ -140,7 +142,8 @@ export default function App() {
         )}
         {loading && (
           <div className="state" role="status">
-            Loading{route.kind === 'profile' ? ` ${route.user}'s games from Colonist.io` : ''}...
+            <span className="loading-die" aria-hidden="true">⚄</span>
+            Gathering{route.kind === 'profile' ? ` ${route.user}'s games from Colonist.io` : ' the game pieces'}...
             {slow && <div className="small">Colonist.io is slow to respond. Still trying (up to 15 seconds).</div>}
           </div>
         )}
@@ -182,52 +185,67 @@ type HomeProps = {
 function Home({ query, setQuery, onSubmit, onDemo }: HomeProps) {
   return (
     <section className="home">
-      <h1>Did you lose to the dice, or to your decisions?</h1>
-      <p className="lede">
-        Enter your Colonist.io username to see how often you win, where you win and lose, and how that compares to what
-        seat count alone would predict.
-      </p>
-      <form className="hero-search" onSubmit={onSubmit}>
-        <input
-          type="search"
-          enterKeyHint="search"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          aria-label="Colonist.io username"
-          placeholder="Your Colonist.io username"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          maxLength={40}
-          autoFocus
-        />
-        <button type="submit" className="primary-lg" disabled={!query.trim()}>
-          Analyze my games
-        </button>
-      </form>
-      <p className="muted small hero-hint">
-        The name shown on your Colonist.io profile, including any #1234 tag. Capitalization doesn't matter. Uses
-        Colonist's public game history: no login needed.
-      </p>
+      <div className="hero-layout">
+        <div className="hero-copy">
+          <div className="eyebrow"><span /> Your next move starts here</div>
+          <h1>Bad dice?<br />Or <span>bad decisions?</span></h1>
+          <p className="lede">
+            Every game has a story. Find your strengths, spot your patterns, and bring a better plan to the board.
+          </p>
+          <label className="hero-label" htmlFor="hero-username">Your Colonist.io username</label>
+          <form className="hero-search" onSubmit={onSubmit}>
+            <input
+              id="hero-username"
+              type="search"
+              enterKeyHint="search"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-label="Colonist.io username"
+              placeholder="e.g. thebestsettler"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              maxLength={40}
+            />
+            <button type="submit" className="primary-lg" disabled={!query.trim()}>
+              Analyze my games <span aria-hidden="true">→</span>
+            </button>
+          </form>
+          <p className="muted small hero-hint">
+            No login. Just your public game history. Include your #1234 tag if you have one; capitalization doesn't matter.
+          </p>
+          <button type="button" className="demo-invite" onClick={onDemo}>
+            Just exploring? <strong>Try the demo <span aria-hidden="true">↗</span></strong>
+          </button>
+        </div>
+        <IslandArt />
+      </div>
+      <div className="section-intro"><span className="eyebrow">Less guessing. Better settling.</span><h2>Get to know your game.</h2></div>
       <div className="home-cards">
-        <div className="card">
+        <div className="card feature-profile">
+          <div className="feature-icon"><FeatureIcon kind="profile" /></div>
+          <span className="feature-step">01 / THE BIG PICTURE</span>
           <h2>Profile analysis</h2>
           <p>Up to 100 recent games from Colonist.io's public history: no login needed.</p>
         </div>
-        <div className="card">
+        <div className="card feature-dice">
+          <div className="feature-icon"><FeatureIcon kind="dice" /></div>
+          <span className="feature-step">02 / THE DICE CHECK</span>
           <h2>
             Luck vs. strategy <span className="demo-tag">Demo</span>
           </h2>
           <p>Actual dice income vs. what your buildings should produce, robber damage, and decision quality.</p>
         </div>
-        <div className="card">
+        <div className="card feature-timeline">
+          <div className="feature-icon"><FeatureIcon kind="timeline" /></div>
+          <span className="feature-step">03 / THE TURNING POINTS</span>
           <h2>
             Game timeline <span className="demo-tag">Demo</span>
           </h2>
           <p>Win probability turn by turn, with your critical errors and best decisions marked.</p>
         </div>
       </div>
-      <p className="muted">
+      <p className="muted demo-explainer">
         Per-game luck and decision analysis needs full replays, which Colonist only shares with logged-in players.{' '}
         <button type="button" className="link inline" onClick={onDemo}>
           See it on the demo profile

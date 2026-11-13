@@ -45,12 +45,12 @@ export const LOSS_VERDICTS = [
 ]
 
 export const RESOURCE_COLORS: Record<string, string> = {
-  lumber: '#4d7c0f',
-  brick: '#b45309',
-  wool: '#a3e635',
-  grain: '#facc15',
-  ore: '#94a3b8',
-  desert: '#e7d7b1',
+  lumber: '#78ab79',
+  brick: '#dc8b66',
+  wool: '#a8cb77',
+  grain: '#e9bb56',
+  ore: '#bccbca',
+  desert: '#e7c78e',
 }
 
 export function timeAgo(ms: number) {
